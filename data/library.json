@@ -80,7 +80,7 @@
       "format": "pdf",
       "fileSize": 104668849,
       "fileName": "الموسوعة اليافعية 8.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792770013725_5q82v.pdf",
+      "filePath": "public\\uploads\\books\\book_1792770013725_5q82v.pdf",
       "collectionId": null,
       "pageCount": 1,
       "status": "ready",
@@ -98,7 +98,7 @@
       "format": "pdf",
       "fileSize": 62126579,
       "fileName": "__الموسوعة اليافعية 7.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792770004151_t0g3w.pdf",
+      "filePath": "public\\uploads\\books\\book_1792770004151_t0g3w.pdf",
       "collectionId": null,
       "pageCount": 1,
       "status": "ready",
@@ -116,7 +116,7 @@
       "format": "pdf",
       "fileSize": 33718592,
       "fileName": "__الموسوعة اليافعية 6.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792769993015_zrshw.pdf",
+      "filePath": "public\\uploads\\books\\book_1792769993015_zrshw.pdf",
       "collectionId": null,
       "pageCount": 1,
       "status": "ready",
@@ -134,7 +134,7 @@
       "format": "pdf",
       "fileSize": 40835088,
       "fileName": "__الموسوعة اليافعية 5.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792769976841_7goiu.pdf",
+      "filePath": "public\\uploads\\books\\book_1792769976841_7goiu.pdf",
       "collectionId": null,
       "pageCount": 1,
       "status": "ready",
@@ -152,7 +152,7 @@
       "format": "pdf",
       "fileSize": 67978070,
       "fileName": "الموسوعة اليافعية 4.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792769967139_yalgk.pdf",
+      "filePath": "public\\uploads\\books\\book_1792769967139_yalgk.pdf",
       "collectionId": null,
       "pageCount": 1,
       "status": "ready",
@@ -170,7 +170,7 @@
       "format": "pdf",
       "fileSize": 65210874,
       "fileName": "الموسوعة اليافعية 3.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792769955698_bzt3m.pdf",
+      "filePath": "public\\uploads\\books\\book_1792769955698_bzt3m.pdf",
       "collectionId": null,
       "pageCount": 1,
       "status": "ready",
@@ -188,7 +188,7 @@
       "format": "pdf",
       "fileSize": 71390464,
       "fileName": "الموسوعة اليافعية 2.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792769944002_6ye60.pdf",
+      "filePath": "public\\uploads\\books\\book_1792769944002_6ye60.pdf",
       "collectionId": null,
       "pageCount": 1,
       "status": "ready",
@@ -206,7 +206,7 @@
       "format": "pdf",
       "fileSize": 11124676,
       "fileName": "علي_صالح_الخلاقي_الخالدي_في_ديوانه_شاعر_يواجه_أكثر_من_مئة_شاعر.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792769923259_5c6mu.pdf",
+      "filePath": "public\\uploads\\books\\book_1792769923259_5c6mu.pdf",
       "collectionId": null,
       "pageCount": 1,
       "status": "ready",
@@ -224,7 +224,7 @@
       "format": "pdf",
       "fileSize": 8962850,
       "fileName": "علي_صالح_الخلاقي_مساجلات_الكهالي_والخالدي_compreللنشرssed.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792769895147_3d5it.pdf",
+      "filePath": "public\\uploads\\books\\book_1792769895147_3d5it.pdf",
       "collectionId": null,
       "pageCount": 1,
       "status": "ready",
@@ -242,7 +242,7 @@
       "format": "pdf",
       "fileSize": 2493092,
       "fileName": "علي_صالح_الخلاقي_زوامل_شعبية_للشاعر_شائف_الخالدي.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792769893008_1uxvr.pdf",
+      "filePath": "public\\uploads\\books\\book_1792769893008_1uxvr.pdf",
       "collectionId": null,
       "pageCount": 1,
       "status": "ready",
@@ -260,7 +260,7 @@
       "format": "pdf",
       "fileSize": 46559898,
       "fileName": "__الموسوعة اليافعية 1.pdf",
-      "filePath": "C:\\Users\\LENOVO\\Desktop\\book\\public\\uploads\\books\\book_1792764136967_ivfy6.pdf",
+      "filePath": "public\\uploads\\books\\book_1792764136967_ivfy6.pdf",
       "collectionId": null,
       "pageCount": 424,
       "status": "ready",
@@ -9647,6 +9647,26 @@
       "note": null,
       "createdAt": "2026-10-23T16:35:59.666Z",
       "updatedAt": "2026-10-23T16:35:59.666Z"
+    },
+    {
+      "id": "hl_1792838597024_ey5p7",
+      "bookId": "book_1792770013725_5q82v",
+      "categoryId": "cat_important",
+      "pageNumber": 13,
+      "text": "خطة البحث:",
+      "positionData": {
+        "type": "box",
+        "box": {
+          "x": 64.06843972724191,
+          "y": 20.304990269075713,
+          "width": 25.760460954653325,
+          "height": 5.834581166591988
+        },
+        "page": 13
+      },
+      "note": null,
+      "createdAt": "2026-10-24T10:43:17.024Z",
+      "updatedAt": "2026-10-24T10:43:17.024Z"
     }
   ],
   "bookmarks": [],
@@ -9675,13 +9695,13 @@
     },
     "book_1792770013725_5q82v": {
       "bookId": "book_1792770013725_5q82v",
-      "currentPage": 12,
+      "currentPage": 2,
       "totalPages": 877,
-      "percentage": 1,
+      "percentage": 0,
       "lastPosition": {
-        "page": 12
+        "page": 2
       },
-      "updatedAt": "2026-10-24T09:44:31.105Z"
+      "updatedAt": "2026-10-24T10:45:53.214Z"
     },
     "book_1792770004151_t0g3w": {
       "bookId": "book_1792770004151_t0g3w",
