@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>المكتبة الرقمية الذكية | نظام متكامل لقراءة وفهرسة الكتب</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Amiri:ital,wght@0,400;0,700;1,400&family=Tajawal:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="assets/css/style.css">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <style>
+    /* Modal active states */
+    .modal-overlay.active {
+      display: flex !important;
+      opacity: 1 !important;
+      visibility: visible !important;
+    }
+    .toast-msg {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      box-shadow: var(--shadow-lg);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.9rem;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .toast-msg.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="app-nav" id="appSidebar">
+      <div class="nav-brand">
+        <div class="brand-logo">
+          <i data-lucide="book-open" style="color: #fff; width: 22px; height: 22px;"></i>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">المكتبة الذكية</div>
+          <div class="brand-subtitle">نظام القراءة والتظليل</div>
+        </div>
+      </div>
+
+      <div class="nav-links">
+        <a href="index.html" class="nav-link active">
+          <i data-lucide="book-open"></i>
+          <span>المكتبة الرئيسية</span>
+        </a>
+        <a href="javascript:void(0)" onclick="openHighlightsModal()" class="nav-link">
+          <i data-lucide="highlighter"></i>
+          <span>جميع التظليلات</span>
+          <span class="nav-badge" id="navHighlightsCount">0</span>
+        </a>
+        <a href="javascript:void(0)" onclick="openBookmarksModal()" class="nav-link">
+          <i data-lucide="bookmark"></i>
+          <span>الإشارات المرجعية</span>
+          <span class="nav-badge" id="navBookmarksCount">0</span>
+        </a>
+        <a href="javascript:void(0)" onclick="openNotesModal()" class="nav-link">
+          <i data-lucide="file-text"></i>
+          <span>الملاحظات والفوائد</span>
+          <span class="nav-badge" id="navNotesCount">0</span>
+        </a>
+        <a href="javascript:void(0)" onclick="openCategoriesModal()" class="nav-link">
+          <i data-lucide="palette"></i>
+          <span>تصنيفات التظليل</span>
+        </a>
+        <a href="javascript:void(0)" onclick="openBackupModal()" class="nav-link">
+          <i data-lucide="database"></i>
+          <span>النسخ الاحتياطي للداتا</span>
+        </a>
+      </div>
+
+      <!-- Quick Upload Button -->
+      <div style="padding: 16px;">
+        <button class="btn btn-primary" style="width: 100%; justify-content: center; gap: 8px;" onclick="document.getElementById('fileUploadInput').click()">
+          <i data-lucide="upload" style="width: 16px; height: 16px;"></i>
+          <span>إضافة كتاب جديد</span>
+        </button>
+        <input type="file" id="fileUploadInput" accept=".pdf,.txt,.docx,.epub" style="display: none;" onchange="handleLocalFileUpload(event)">
+      </div>
+
+      <!-- Nav Footer with Theme Switcher -->
+      <div class="nav-footer">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <span style="font-size: 0.8rem; color: var(--text-muted);">المظهر والثيم</span>
+          <div style="display: flex; gap: 4px;">
+            <button class="btn-icon" style="width: 28px; height: 28px;" onclick="setTheme('dark')" title="داكن"><i data-lucide="moon" style="width: 14px; height: 14px;"></i></button>
+            <button class="btn-icon" style="width: 28px; height: 28px;" onclick="setTheme('light')" title="فاتح"><i data-lucide="sun" style="width: 14px; height: 14px;"></i></button>
+            <button class="btn-icon" style="width: 28px; height: 28px;" onclick="setTheme('sepia')" title="سيبيا مريح"><i data-lucide="coffee" style="width: 14px; height: 14px;"></i></button>
+          </div>
+        </div>
+        <div style="font-size: 0.72rem; color: var(--text-muted); text-align: center;">
+          المكتبة الرقمية • إصدار ويب جيتهب 2026
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      <!-- Mobile Top Bar -->
+      <header class="app-header">
+        <div class="header-content">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button class="btn-icon mobile-menu-btn" onclick="toggleSidebar()">
+              <i data-lucide="menu"></i>
+            </button>
+            <div style="font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+              <i data-lucide="book-open" style="color: var(--accent-primary);"></i>
+              <span>المكتبة الذكية</span>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="openBackupModal()">
+              <i data-lucide="download" style="width: 14px; height: 14px;"></i>
+              <span class="desktop-only">حفظ نسخة احتياطية</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div class="app-body">
+        <!-- Banner / Stats -->
+        <div class="page-title-box">
+          <div>
+            <h1 class="page-title">
+              <i data-lucide="book-open" style="color: var(--accent-primary); width: 28px; height: 28px;"></i>
+              <span>مكتبتي الشخصية</span>
+            </h1>
+            <p class="page-subtitle" id="libraryStatsSub">
+              لديك 11 كتاب في المكتبة — اقرأ، وابحث، وظلل بنظام التصنيفات المخصص
+            </p>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <!-- View Mode Toggle -->
+            <div style="display: flex; background: rgba(255, 255, 255, 0.05); border-radius: var(--radius-md); padding: 3px;">
+              <button class="btn-icon active" id="btnViewGrid" onclick="setViewMode('grid')" title="عرض الأغلفة">
+                <i data-lucide="grid" style="width: 16px; height: 16px;"></i>
+              </button>
+              <button class="btn-icon" id="btnViewList" onclick="setViewMode('list')" title="عرض القائمة">
+                <i data-lucide="list" style="width: 16px; height: 16px;"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter and Search Bar -->
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 12px 14px; background: var(--bg-glass); border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
+          <!-- Search input -->
+          <div style="position: relative; min-width: min(100%, 240px); flex: 1 1 220px;">
+            <i data-lucide="search" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); width: 16px; height: 16px;"></i>
+            <input type="text" id="searchInput" class="form-input" style="padding-right: 40px;" placeholder="ابحث بالعنوان أو اسم المؤلف..." oninput="handleSearch(this.value)">
+          </div>
+
+          <!-- Format Filter Pills -->
+          <div id="formatPills" class="hide-scrollbar" style="display: flex; gap: 6px; overflow-x: auto; max-width: 100%; padding-bottom: 2px;">
+            <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem; white-space: nowrap;" onclick="filterFormat(null)">الكل</button>
+            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem; white-space: nowrap;" onclick="filterFormat('pdf')">PDF</button>
+            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem; white-space: nowrap;" onclick="filterFormat('epub')">EPUB</button>
+            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem; white-space: nowrap;" onclick="filterFormat('txt')">TXT</button>
+            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem; white-space: nowrap;" onclick="filterFormat('docx')">DOCX</button>
+          </div>
+        </div>
+
+        <!-- Collections Filter Pills -->
+        <div id="collectionPills" class="hide-scrollbar" style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 4px;">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Books Container -->
+        <div id="booksGridContainer" class="books-grid">
+          <!-- Dynamically populated -->
+        </div>
+        <div id="booksListContainer" style="display: none; flex-direction: column; gap: 12px;">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Edit Metadata Modal -->
+  <div id="editBookModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title">تعديل بيانات الكتاب</h3>
+        <button class="btn-icon" onclick="closeModal('editBookModal')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editBookId">
+        <div class="form-group">
+          <label class="form-label">عنوان الكتاب</label>
+          <input type="text" id="editBookTitle" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">اسم المؤلف</label>
+          <input type="text" id="editBookAuthor" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">المجموعة / المجلد</label>
+          <select id="editBookCollection" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">الوصف أو النبذة</label>
+          <textarea id="editBookDesc" class="form-textarea" rows="3" placeholder="نبذة مختصرة عن هذا الكتاب..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('editBookModal')">إلغاء</button>
+        <button class="btn btn-primary" onclick="saveBookMetadata()">حفظ التعديلات</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Book Modal -->
+  <div id="deleteBookModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: var(--danger); display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="alert-triangle"></i>
+          <span>تأكيد حذف الكتاب</span>
+        </h3>
+        <button class="btn-icon" onclick="closeModal('deleteBookModal')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 1rem; line-height: 1.6;">هل أنت متأكد من رغبتك في حذف كتاب: <strong id="deleteBookTitleName"></strong>؟</p>
+        <div style="margin-top: 14px; padding: 12px 16px; border-radius: var(--radius-md); background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); font-size: 0.85rem; color: var(--danger); line-height: 1.6;">
+          ⚠️ <strong>تنبيه:</strong> سيتم حذف الكتاب مع كافة التظليلات والعلامات المرجعية والملاحظات المرتبطة به.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('deleteBookModal')">إلغاء</button>
+        <button class="btn btn-danger" onclick="confirmDeleteBook()">نعم، احذف الكتاب</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Collection Modal -->
+  <div id="newCollectionModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title">إنشاء مجموعة جديدة لتنظيم الكتب</h3>
+        <button class="btn-icon" onclick="closeModal('newCollectionModal')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">اسم المجموعة / المجلد</label>
+          <input type="text" id="newColName" class="form-input" placeholder="مثال: كتب التاريخ، الأدب العربي...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">وصف اختياري</label>
+          <input type="text" id="newColDesc" class="form-input" placeholder="وصف المجموعة...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('newCollectionModal')">إلغاء</button>
+        <button class="btn btn-primary" onclick="createCollection()">إنشاء المجموعة</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- All Highlights Modal -->
+  <div id="highlightsModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 700px; max-height: 85vh; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="highlighter" style="color: var(--accent-primary);"></i>
+          <span>سجل التظليلات والاقتباسات</span>
+        </h3>
+        <button class="btn-icon" onclick="closeModal('highlightsModal')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" id="highlightsListBody" style="overflow-y: auto; flex: 1;">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- All Bookmarks Modal -->
+  <div id="bookmarksModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 650px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="bookmark" style="color: var(--warning);"></i>
+          <span>العلامات المرجعية المحفوظة</span>
+        </h3>
+        <button class="btn-icon" onclick="closeModal('bookmarksModal')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" id="bookmarksListBody" style="max-height: 65vh; overflow-y: auto;">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- All Notes Modal -->
+  <div id="notesModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 650px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="file-text" style="color: var(--accent-secondary);"></i>
+          <span>الملاحظات والفوائد المسجلة</span>
+        </h3>
+        <button class="btn-icon" onclick="closeModal('notesModal')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" id="notesListBody" style="max-height: 65vh; overflow-y: auto;">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Categories Management Modal -->
+  <div id="categoriesModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="palette" style="color: var(--accent-primary);"></i>
+          <span>تصنيفات التظليل وألوانها</span>
+        </h3>
+        <button class="btn-icon" onclick="closeModal('categoriesModal')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" id="categoriesListBody">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Backup & Data Modal -->
+  <div id="backupModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 550px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="database" style="color: var(--success);"></i>
+          <span>النسخ الاحتياطي وإدارة البيانات</span>
+        </h3>
+        <button class="btn-icon" onclick="closeModal('backupModal')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6;">
+          كافة كتبك وتظليلاتك وملاحظاتك محفوظة بأمان تام في متصفحك. يمكنك تنزيل نسخة احتياطية بصيغة JSON لنقلها لأي جهاز آخر في أي وقت.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <button class="btn btn-primary" style="justify-content: center; padding: 12px;" onclick="downloadDataBackup()">
+            <i data-lucide="download"></i>
+            <span>تنزيل نسخة احتياطية كاملة (JSON)</span>
+          </button>
+
+          <button class="btn btn-secondary" style="justify-content: center; padding: 12px;" onclick="document.getElementById('importBackupInput').click()">
+            <i data-lucide="upload"></i>
+            <span>استيراد نسخة سابقة (JSON)</span>
+          </button>
+          <input type="file" id="importBackupInput" accept=".json" style="display: none;" onchange="handleImportBackup(event)">
+
+          <button class="btn btn-secondary" style="justify-content: center; padding: 12px; color: var(--danger); border-color: rgba(239, 68, 68, 0.3);" onclick="confirmResetData()">
+            <i data-lucide="refresh-cw"></i>
+            <span>إعادة ضبط البيانات للوضع الأصلي</span>
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('backupModal')">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastMessage" class="toast-msg">
+    <i data-lucide="check-circle" style="color: var(--success); width: 18px; height: 18px;"></i>
+    <span id="toastText">تم الإجراء بنجاح</span>
+  </div>
+
+  <!-- Scripts -->
+  <script src="assets/js/db.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
