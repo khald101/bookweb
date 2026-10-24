@@ -41,5 +41,5 @@ yarn-error.log*
 next-env.d.ts
 
 # uploads
-/public/uploads/books/
+/public/uploads/books/book_1792770013725_5q82v.pdf
 cloudflared.exe
