@@ -40,6 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# uploads (large files exceeding GitHub limits)
-/public/uploads/books/*
-!/public/uploads/books/.gitkeep
+# uploads
+/public/uploads/books/
+
