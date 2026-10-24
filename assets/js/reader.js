@@ -1,5 +1,5 @@
 /**
- * BookWeb - Client-Side Reader Engine
+ * BookWeb - Client-Side Reader Engine with Full Search, Highlight & Note Creation
  */
 
 let bookId = '';
@@ -46,11 +46,10 @@ function initReader() {
   const savedFont = localStorage.getItem('bookweb-font-family');
   if (savedFont) {
     currentFontFamily = savedFont;
-    document.getElementById('fontFamilySelect').value = savedFont;
     applyFontFamily();
   }
 
-  // Calculate total pages from database text pages or book record
+  // Calculate total pages
   const allTexts = window.BookDB.getAllBookTexts(bookId);
   const maxTextPage = allTexts.reduce((max, t) => Math.max(max, t.pageNumber), 1);
   totalPages = Math.max(currentBook.pageCount || 1, maxTextPage);
@@ -70,8 +69,9 @@ function initReader() {
   document.getElementById('readerBookAuthor').textContent = `المؤلف: ${currentBook.author || 'غير محدد'}`;
   document.title = `${currentBook.title} | قارئ الكتب الذكي`;
 
-  // Render Category Dots for the selection toolbar
+  // Render Category Dots for the selection toolbar & tab
   renderFloatingCategories();
+  renderColorsTab();
 
   // Load page content and tabs
   renderCurrentPage();
@@ -107,19 +107,24 @@ function switchSidebarTab(tabName) {
   tabs.forEach(t => t.classList.remove('active'));
   contents.forEach(c => c.classList.remove('active'));
 
-  if (tabName === 'search') {
-    tabs[0].classList.add('active');
-    document.getElementById('tabSearch').classList.add('active');
-  } else if (tabName === 'toc') {
-    tabs[1].classList.add('active');
-    document.getElementById('tabToc').classList.add('active');
-  } else if (tabName === 'highlights') {
-    tabs[2].classList.add('active');
-    document.getElementById('tabHighlights').classList.add('active');
-  } else if (tabName === 'notes') {
-    tabs[3].classList.add('active');
-    document.getElementById('tabNotes').classList.add('active');
-  }
+  const tabIndex = { search: 0, highlights: 1, notes: 2, toc: 3, colors: 4 };
+  const idx = tabIndex[tabName] !== undefined ? tabIndex[tabName] : 0;
+  if (tabs[idx]) tabs[idx].classList.add('active');
+
+  const contentMap = {
+    search: 'tabSearch',
+    highlights: 'tabHighlights',
+    notes: 'tabNotes',
+    toc: 'tabToc',
+    colors: 'tabColors'
+  };
+  const targetId = contentMap[tabName] || 'tabSearch';
+  const targetContent = document.getElementById(targetId);
+  if (targetContent) targetContent.classList.add('active');
+
+  if (tabName === 'colors') renderColorsTab();
+  if (tabName === 'search') document.getElementById('inBookSearchInput')?.focus();
+  lucide.createIcons();
 }
 
 // Theme switch
@@ -170,6 +175,9 @@ function goToPage(pageNum) {
   renderPagesTOC();
   updateBookmarkButton();
 
+  const noteBadge = document.getElementById('noteCurrentPageBadge');
+  if (noteBadge) noteBadge.textContent = currentPage;
+
   // Scroll to top
   const viewport = document.getElementById('readerViewport');
   if (viewport) viewport.scrollTop = 0;
@@ -192,7 +200,6 @@ function renderCurrentPage() {
     // Apply highlights for this page
     const pageHighlights = window.BookDB.getHighlights(bookId).filter(h => h.pageNumber === currentPage);
 
-    // Escape HTML first
     let safeContent = escapeHtml(content);
 
     pageHighlights.forEach(h => {
@@ -201,7 +208,7 @@ function renderCurrentPage() {
         const catColor = h.category?.colorHex || '#EF4444';
         const catName = h.category?.name || 'تظليل';
         const regex = new RegExp(`(${escapeRegExp(phrase)})`, 'gi');
-        safeContent = safeContent.replace(regex, `<mark class="highlight-mark" style="background-color: ${catColor}44; border-bottom: 2px solid ${catColor};" title="${catName}: ${escapeHtml(h.note || '')}" onclick="showHighlightDetails('${h.id}')">$1</mark>`);
+        safeContent = safeContent.replace(regex, `<mark class="highlight-mark" style="background-color: ${catColor}44; border-bottom: 2.5px solid ${catColor};" title="${catName}: ${escapeHtml(h.note || '')}" onclick="showHighlightDetails('${h.id}')">$1</mark>`);
       }
     });
 
@@ -213,12 +220,11 @@ function renderCurrentPage() {
 
     container.innerHTML = safeContent;
   } else {
-    // Page with no extracted text (e.g., initial cover or image)
     container.innerHTML = `
       <div style="padding: 60px 20px; text-align: center; color: var(--text-muted);">
         <i data-lucide="book-open" style="width: 48px; height: 48px; margin: 0 auto 16px; opacity: 0.5;"></i>
         <h3 style="font-size: 1.2rem; color: var(--text-primary); margin-bottom: 8px;">صفحة ${currentPage}</h3>
-        <p style="font-size: 0.9rem; margin-bottom: 20px;">نص هذه الصفحة عبارة عن غلاف أو وثيقة مصورة</p>
+        <p style="font-size: 0.9rem; margin-bottom: 20px;">هذه الصفحة عبارة عن غلاف أو وثيقة مصورة</p>
         <div style="display: flex; justify-content: center; gap: 10px;">
           <button class="btn btn-secondary" onclick="promptPastePageText()">
             <i data-lucide="edit-3" style="width: 14px; height: 14px;"></i>
@@ -250,49 +256,9 @@ function renderPagesTOC() {
   container.innerHTML = html;
 }
 
-// Render Highlights in Sidebar
-function renderBookHighlights() {
-  const container = document.getElementById('bookHighlightsList');
-  if (!container) return;
-
-  const highlights = window.BookDB.getHighlights(bookId);
-
-  if (highlights.length === 0) {
-    container.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">لا توجد تظليلات في هذا الكتاب بعد. ظلل أي عبارة تهمك!</div>';
-    return;
-  }
-
-  let html = '';
-  highlights.forEach(h => {
-    const catColor = h.category?.colorHex || '#EF4444';
-    const catName = h.category?.name || 'تظليل';
-
-    html += `
-      <div style="padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-card); border-right: 3px solid ${catColor}; border: 1px solid var(--border-color); border-right: 3px solid ${catColor};">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 0.75rem; color: ${catColor}; font-weight: 600;">${catName} — ص ${h.pageNumber}</span>
-          <div style="display: flex; gap: 4px;">
-            <button class="btn-icon" style="width: 22px; height: 22px;" onclick="goToPage(${h.pageNumber})" title="انتقال"><i data-lucide="eye" style="width: 12px; height: 12px;"></i></button>
-            <button class="btn-icon" style="width: 22px; height: 22px; color: var(--danger);" onclick="deleteHighlight('${h.id}')" title="حذف"><i data-lucide="trash-2" style="width: 12px; height: 12px;"></i></button>
-          </div>
-        </div>
-        <p style="font-size: 0.88rem; line-height: 1.5; font-family: var(--font-amiri); color: var(--text-primary); cursor: pointer;" onclick="goToPage(${h.pageNumber})">${h.text}</p>
-        ${h.note ? `<div style="margin-top: 6px; padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); font-size: 0.78rem; color: var(--accent-secondary);">${h.note}</div>` : ''}
-      </div>
-    `;
-  });
-  container.innerHTML = html;
-  lucide.createIcons();
-}
-
-function deleteHighlight(id) {
-  window.BookDB.deleteHighlight(id);
-  renderCurrentPage();
-  renderBookHighlights();
-  showReaderToast('تم حذف التظليل');
-}
-
-// In-Book Search
+// =========================================================================
+// FEATURE 1: IN-BOOK SEARCH ("البحث الي داخل الكتاب")
+// =========================================================================
 function handleInBookSearch(query) {
   const container = document.getElementById('searchResultsList');
   const countEl = document.getElementById('searchMatchesCount');
@@ -307,17 +273,20 @@ function handleInBookSearch(query) {
   let totalMatches = 0;
   results.forEach(r => totalMatches += r.matches.length);
 
-  countEl.textContent = `تم العثور على ${totalMatches} نتيجة في ${results.length} صفحة`;
+  countEl.textContent = `تم العثور على ${totalMatches} نتيجة في ${results.length} صفحة:`;
 
   if (results.length === 0) {
-    container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">لا توجد نتائج مطابقة لبحثك</div>';
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">لا توجد نتائج مطابقة لبحثك في هذا الكتاب</div>';
     return;
   }
 
   let html = '';
   results.forEach(res => {
     res.matches.forEach(m => {
-      const highlightedSnippet = escapeHtml(m.snippet).replace(new RegExp(escapeRegExp(escapeHtml(query.trim())), 'gi'), '<span class="search-match-text">$&</span>');
+      const safeSnippet = escapeHtml(m.snippet);
+      const safeQuery = escapeHtml(query.trim());
+      const regex = new RegExp(`(${escapeRegExp(safeQuery)})`, 'gi');
+      const highlightedSnippet = safeSnippet.replace(regex, '<span class="search-match-text">$1</span>');
 
       html += `
         <div style="padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border-color); cursor: pointer; transition: background 0.15s ease;" onclick="goToPage(${res.pageNumber})">
@@ -334,7 +303,162 @@ function handleInBookSearch(query) {
   container.innerHTML = html;
 }
 
-// Render Notes
+// =========================================================================
+// FEATURE 2: CREATE & MANAGE HIGHLIGHTS ("إنشاء تظليل")
+// =========================================================================
+function renderBookHighlights() {
+  const container = document.getElementById('bookHighlightsList');
+  if (!container) return;
+
+  const highlights = window.BookDB.getHighlights(bookId);
+
+  if (highlights.length === 0) {
+    container.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">لا توجد تظليلات في هذا الكتاب بعد. حدد أي نص في الصفحة لتظليله أو اضغط على «+ إنشاء تظليل»!</div>';
+    return;
+  }
+
+  let html = '';
+  highlights.forEach(h => {
+    const catColor = h.category?.colorHex || '#EF4444';
+    const catName = h.category?.name || 'تظليل';
+
+    html += `
+      <div style="padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border-color); border-right: 4px solid ${catColor};">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 0.75rem; color: ${catColor}; font-weight: 700;">${catName} — ص ${h.pageNumber}</span>
+          <div style="display: flex; gap: 4px;">
+            <button class="btn-icon" style="width: 22px; height: 22px;" onclick="goToPage(${h.pageNumber})" title="انتقال"><i data-lucide="eye" style="width: 12px; height: 12px;"></i></button>
+            <button class="btn-icon" style="width: 22px; height: 22px; color: var(--danger);" onclick="deleteHighlight('${h.id}')" title="حذف"><i data-lucide="trash-2" style="width: 12px; height: 12px;"></i></button>
+          </div>
+        </div>
+        <p style="font-size: 0.88rem; line-height: 1.5; font-family: var(--font-amiri); color: var(--text-primary); cursor: pointer;" onclick="goToPage(${h.pageNumber})">${h.text}</p>
+        ${h.note ? `<div style="margin-top: 6px; padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); font-size: 0.78rem; color: var(--accent-secondary);">${h.note}</div>` : ''}
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+  lucide.createIcons();
+}
+
+function openManualHighlightModal() {
+  const selection = window.getSelection()?.toString().trim();
+  document.getElementById('manualHighlightText').value = selection || '';
+  
+  const categories = window.BookDB.getCategories();
+  const select = document.getElementById('manualHighlightCatSelect');
+  select.innerHTML = categories.map(c => `<option value="${c.id}">${c.name} (${c.colorHex})</option>`).join('');
+
+  document.getElementById('manualHighlightNote').value = '';
+  document.getElementById('manualHighlightModal').style.display = 'flex';
+}
+
+function confirmSaveManualHighlight() {
+  const text = document.getElementById('manualHighlightText').value.trim();
+  const categoryId = document.getElementById('manualHighlightCatSelect').value;
+  const note = document.getElementById('manualHighlightNote').value.trim();
+
+  if (!text) {
+    alert('يرجى تحديد أو كتابة النص المراد تظليله');
+    return;
+  }
+
+  window.BookDB.saveHighlight({
+    bookId,
+    categoryId,
+    pageNumber: currentPage,
+    text,
+    note: note || undefined
+  });
+
+  closeModal('manualHighlightModal');
+  renderCurrentPage();
+  renderBookHighlights();
+  showReaderToast('تم إنشاء التظليل بنجاح');
+}
+
+function deleteHighlight(id) {
+  window.BookDB.deleteHighlight(id);
+  renderCurrentPage();
+  renderBookHighlights();
+  showReaderToast('تم حذف التظليل');
+}
+
+// =========================================================================
+// FEATURE 3: CREATE & MANAGE COLOR CATEGORIES ("إنشاء لون جديد")
+// =========================================================================
+function renderFloatingCategories() {
+  const container = document.getElementById('floatingCategoriesDots');
+  if (!container) return;
+
+  const categories = window.BookDB.getCategories();
+  let html = '';
+  categories.forEach(c => {
+    html += `
+      <div class="category-dot-btn" style="background: ${c.colorHex};" title="${c.name}" onclick="applyHighlightCategory('${c.id}')"></div>
+    `;
+  });
+  container.innerHTML = html;
+}
+
+function renderColorsTab() {
+  const container = document.getElementById('bookColorsList');
+  if (!container) return;
+
+  const categories = window.BookDB.getCategories();
+  let html = '';
+  categories.forEach(c => {
+    html += `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border-color);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 16px; height: 16px; border-radius: 50%; background: ${c.colorHex};"></span>
+          <span style="font-size: 0.85rem; font-weight: 600;">${c.name}</span>
+        </div>
+        <span style="font-size: 0.72rem; color: var(--text-muted);">${c.colorHex}</span>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+}
+
+function openCreateColorModal() {
+  document.getElementById('modalColorName').value = '';
+  document.getElementById('modalColorPicker').value = '#10B981';
+  document.getElementById('modalColorHex').value = '#10B981';
+  document.getElementById('modalColorDesc').value = '';
+  document.getElementById('colorModal').style.display = 'flex';
+}
+
+function confirmSaveNewColor() {
+  const name = document.getElementById('modalColorName').value.trim();
+  const colorHex = document.getElementById('modalColorHex').value.trim() || '#10B981';
+  const description = document.getElementById('modalColorDesc').value.trim();
+
+  if (!name) {
+    alert('يرجى إدخال اسم التصنيف اللوني (مثل: معلومات تاريخية، اقتباسات، إلخ)');
+    return;
+  }
+
+  const newCat = window.BookDB.saveCategory({
+    name,
+    colorHex,
+    description
+  });
+
+  closeModal('colorModal');
+  renderFloatingCategories();
+  renderColorsTab();
+
+  // If there's an active text selection, highlight with the new color immediately
+  if (selectedTextSnippet) {
+    applyHighlightCategory(newCat.id);
+  }
+
+  showReaderToast(`تم إنشاء اللون الجديد: ${name}`);
+}
+
+// =========================================================================
+// FEATURE 4: CREATE & MANAGE NOTES ("إنشاء ملاحظة")
+// =========================================================================
 function renderBookNotes() {
   const container = document.getElementById('bookNotesList');
   if (!container) return;
@@ -365,6 +489,13 @@ function renderBookNotes() {
   lucide.createIcons();
 }
 
+function openAddNoteModal() {
+  document.getElementById('noteSelectedTextPreview').textContent = `ملاحظة عامة على صفحة ${currentPage}`;
+  document.getElementById('noteInputText').value = '';
+  selectedTextSnippet = '';
+  document.getElementById('noteModal').style.display = 'flex';
+}
+
 function saveCurrentPageNote() {
   const input = document.getElementById('newNoteInput');
   const text = input.value.trim();
@@ -378,7 +509,7 @@ function saveCurrentPageNote() {
 
   input.value = '';
   renderBookNotes();
-  showReaderToast('تم حفظ الملاحظة بنجاح');
+  showReaderToast('تم إنشاء الملاحظة بنجاح');
 }
 
 function deleteReaderNote(id) {
@@ -416,21 +547,7 @@ function toggleBookmarkCurrentPage() {
   updateBookmarkButton();
 }
 
-// Floating Highlight Toolbar
-function renderFloatingCategories() {
-  const container = document.getElementById('floatingCategoriesDots');
-  if (!container) return;
-
-  const categories = window.BookDB.getCategories();
-  let html = '';
-  categories.forEach(c => {
-    html += `
-      <div class="category-dot-btn" style="background: ${c.colorHex};" title="${c.name}" onclick="applyHighlightCategory('${c.id}')"></div>
-    `;
-  });
-  container.innerHTML = html;
-}
-
+// Text Selection Handling
 function handleTextSelection() {
   const selection = window.getSelection();
   const toolbar = document.getElementById('floatingToolbar');
@@ -501,11 +618,12 @@ function closeNoteModal() {
 
 function confirmSaveNoteFromSelection() {
   const note = document.getElementById('noteInputText').value.trim();
-  if (note && selectedTextSnippet) {
+  if (note) {
+    const textToSave = selectedTextSnippet ? `${note}\n(اقتباس: "${selectedTextSnippet}")` : note;
     window.BookDB.saveNote({
       bookId,
       pageNumber: currentPage,
-      text: `${note}\n(اقتباس: "${selectedTextSnippet}")`
+      text: textToSave
     });
     renderBookNotes();
     closeNoteModal();
@@ -528,7 +646,11 @@ function promptPastePageText() {
   }
 }
 
-// Helpers
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+}
+
 function showReaderToast(msg) {
   const toast = document.getElementById('readerToast');
   const text = document.getElementById('readerToastText');

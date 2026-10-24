@@ -28,7 +28,7 @@
     }
 
     .reader-navbar {
-      height: 56px;
+      height: 60px;
       background: var(--bg-card);
       border-bottom: 1px solid var(--border-color);
       display: flex;
@@ -37,18 +37,19 @@
       padding: 0 16px;
       z-index: 50;
       flex-shrink: 0;
+      gap: 10px;
     }
 
     .reader-workspace {
       display: flex;
       flex: 1;
-      height: calc(100vh - 56px);
+      height: calc(100vh - 60px);
       overflow: hidden;
       position: relative;
     }
 
     .reader-sidebar {
-      width: 320px;
+      width: 340px;
       background: var(--sidebar-bg);
       border-left: 1px solid var(--border-color);
       display: flex;
@@ -73,7 +74,7 @@
 
     .sidebar-tab-btn {
       flex: 1;
-      padding: 10px 8px;
+      padding: 12px 6px;
       font-size: 0.8rem;
       font-weight: 600;
       color: var(--text-muted);
@@ -83,7 +84,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 4px;
       white-space: nowrap;
       border-bottom: 2px solid transparent;
       transition: all var(--transition-fast);
@@ -120,7 +121,7 @@
 
     .reader-sheet {
       width: 100%;
-      max-width: 820px;
+      max-width: 840px;
       min-height: calc(100vh - 160px);
       background: var(--reader-paper);
       color: var(--reader-text);
@@ -142,14 +143,14 @@
       border: 1px solid var(--border-color);
       border-radius: var(--radius-lg);
       box-shadow: var(--shadow-glow);
-      padding: 6px 10px;
+      padding: 8px 12px;
       display: none;
       align-items: center;
       gap: 8px;
       z-index: 100;
       transform: translate(-50%, -100%);
       margin-top: -12px;
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(14px);
     }
 
     .floating-toolbar.active {
@@ -163,10 +164,30 @@
       border: 2px solid transparent;
       cursor: pointer;
       transition: transform 0.15s ease;
+      position: relative;
     }
 
     .category-dot-btn:hover {
-      transform: scale(1.2);
+      transform: scale(1.25);
+    }
+
+    .highlight-mark {
+      padding: 1px 4px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+
+    .highlight-mark:hover {
+      opacity: 0.85;
+    }
+
+    .search-match-text {
+      background: rgba(245, 158, 11, 0.5);
+      color: #fff;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-weight: 700;
     }
 
     /* Reader Bottom Control Bar */
@@ -187,26 +208,6 @@
       z-index: 45;
     }
 
-    .highlight-mark {
-      padding: 1px 4px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: opacity 0.15s ease;
-    }
-
-    .highlight-mark:hover {
-      opacity: 0.85;
-    }
-
-    /* Search match mark */
-    .search-match-text {
-      background: rgba(245, 158, 11, 0.4);
-      color: #fff;
-      padding: 1px 3px;
-      border-radius: 3px;
-      font-weight: 700;
-    }
-
     @media (max-width: 768px) {
       .reader-sheet {
         padding: 24px 18px;
@@ -217,7 +218,7 @@
         right: 0;
         top: 0;
         width: 100%;
-        max-width: 300px;
+        max-width: 320px;
         box-shadow: var(--shadow-lg);
       }
     }
@@ -227,27 +228,27 @@
 
   <!-- Top Navigation Bar -->
   <header class="reader-navbar">
-    <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
-      <a href="index.html" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.82rem; gap: 6px;">
+    <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+      <a href="index.html" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.82rem; gap: 6px; flex-shrink: 0;">
         <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
         <span>المكتبة</span>
       </a>
 
       <div style="min-width: 0;">
-        <div id="readerBookTitle" style="font-weight: 700; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px;">جاري تحميل الكتاب...</div>
-        <div id="readerBookAuthor" style="font-size: 0.75rem; color: var(--text-muted);">المؤلف: غير محدد</div>
+        <div id="readerBookTitle" style="font-weight: 700; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;">جاري تحميل الكتاب...</div>
+        <div id="readerBookAuthor" style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">المؤلف: غير محدد</div>
       </div>
     </div>
 
     <!-- Center Page Control -->
-    <div style="display: flex; align-items: center; gap: 8px;">
+    <div style="display: flex; align-items: center; gap: 6px;">
       <button class="btn-icon" style="width: 32px; height: 32px;" onclick="goToPage(currentPage - 1)" title="الصفحة السابقة (سهم يسار)">
         <i data-lucide="chevron-right"></i>
       </button>
 
-      <div style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem;">
+      <div style="display: flex; align-items: center; gap: 4px; font-size: 0.85rem;">
         <span>صفحة</span>
-        <input type="number" id="jumpPageInput" min="1" value="1" style="width: 54px; text-align: center; padding: 4px; border-radius: var(--radius-sm); background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary); font-family: inherit;" onchange="goToPage(parseInt(this.value))">
+        <input type="number" id="jumpPageInput" min="1" value="1" style="width: 50px; text-align: center; padding: 4px; border-radius: var(--radius-sm); background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary); font-family: inherit;" onchange="goToPage(parseInt(this.value))">
         <span>من <span id="readerTotalPages">1</span></span>
       </div>
 
@@ -256,22 +257,27 @@
       </button>
     </div>
 
-    <!-- Right Controls: Font, Themes, Sidebar -->
+    <!-- Action Shortcuts: + إنشاء تظليل, + إنشاء ملاحظة, + إنشاء لون -->
     <div style="display: flex; align-items: center; gap: 6px;">
-      <!-- Font Size -->
-      <button class="btn-icon" style="width: 32px; height: 32px;" onclick="changeFontSize(-1)" title="تصغير الخط">
-        <i data-lucide="zoom-out" style="width: 14px; height: 14px;"></i>
-      </button>
-      <button class="btn-icon" style="width: 32px; height: 32px;" onclick="changeFontSize(1)" title="تكبير الخط">
-        <i data-lucide="zoom-in" style="width: 14px; height: 14px;"></i>
+      <!-- Quick Action Buttons -->
+      <button class="btn btn-primary" style="padding: 5px 10px; font-size: 0.78rem; gap: 4px;" onclick="openManualHighlightModal()" title="تظليل عبارة">
+        <i data-lucide="highlighter" style="width: 14px; height: 14px;"></i>
+        <span class="desktop-only">+ إنشاء تظليل</span>
       </button>
 
-      <!-- Font Family -->
-      <select id="fontFamilySelect" onchange="changeFontFamily(this.value)" style="padding: 4px 8px; border-radius: var(--radius-sm); background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem; font-family: inherit;">
-        <option value="Amiri">خط أميري</option>
-        <option value="Cairo">خط القاهرة</option>
-        <option value="Tajawal">خط تجوال</option>
-      </select>
+      <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.78rem; gap: 4px;" onclick="openAddNoteModal()" title="إضافة ملاحظة على الصفحة">
+        <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
+        <span class="desktop-only">+ إنشاء ملاحظة</span>
+      </button>
+
+      <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.78rem; gap: 4px;" onclick="openCreateColorModal()" title="إنشاء لون تصنيف جديد">
+        <i data-lucide="palette" style="width: 14px; height: 14px; color: #F59E0B;"></i>
+        <span class="desktop-only">+ إنشاء لون</span>
+      </button>
+
+      <!-- Font Controls -->
+      <button class="btn-icon" style="width: 32px; height: 32px;" onclick="changeFontSize(-1)" title="تصغير الخط"><i data-lucide="zoom-out" style="width: 14px; height: 14px;"></i></button>
+      <button class="btn-icon" style="width: 32px; height: 32px;" onclick="changeFontSize(1)" title="تكبير الخط"><i data-lucide="zoom-in" style="width: 14px; height: 14px;"></i></button>
 
       <!-- Themes -->
       <button class="btn-icon" style="width: 32px; height: 32px;" onclick="switchTheme('dark')" title="داكن"><i data-lucide="moon" style="width: 14px; height: 14px;"></i></button>
@@ -280,8 +286,8 @@
 
       <!-- Sidebar Toggle -->
       <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.82rem; gap: 6px;" onclick="toggleSidebar()">
-        <i data-lucide="list" style="width: 14px; height: 14px;"></i>
-        <span>القائمة والبحث</span>
+        <i data-lucide="search" style="width: 14px; height: 14px; color: var(--accent-primary);"></i>
+        <span>البحث والقائمة</span>
       </button>
     </div>
   </header>
@@ -299,11 +305,15 @@
 
       <!-- Floating Highlight Toolbar -->
       <div id="floatingToolbar" class="floating-toolbar">
-        <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 4px;">تظليل:</span>
-        <div id="floatingCategoriesDots" style="display: flex; gap: 5px;"></div>
+        <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); margin-left: 4px;">اختر لون التظليل:</span>
+        <div id="floatingCategoriesDots" style="display: flex; gap: 6px; align-items: center;"></div>
+        
+        <!-- Button to create new color right from floating toolbar -->
+        <button class="btn-icon" style="width: 24px; height: 24px;" onclick="openCreateColorModal()" title="إضافة لون جديد"><i data-lucide="plus" style="width: 14px; height: 14px;"></i></button>
+
         <div style="width: 1px; height: 20px; background: var(--border-color); margin: 0 4px;"></div>
-        <button class="btn-icon" style="width: 26px; height: 26px;" onclick="addNoteFromSelection()" title="إضافة ملاحظة على النص"><i data-lucide="file-text" style="width: 14px; height: 14px;"></i></button>
-        <button class="btn-icon" style="width: 26px; height: 26px;" onclick="copySelectionText()" title="نسخ"><i data-lucide="copy" style="width: 14px; height: 14px;"></i></button>
+        <button class="btn-icon" style="width: 28px; height: 28px;" onclick="addNoteFromSelection()" title="إضافة ملاحظة على هذا النص"><i data-lucide="file-text" style="width: 15px; height: 15px;"></i></button>
+        <button class="btn-icon" style="width: 28px; height: 28px;" onclick="copySelectionText()" title="نسخ النص"><i data-lucide="copy" style="width: 15px; height: 15px;"></i></button>
       </div>
 
       <!-- Bottom Navigation Controller -->
@@ -323,11 +333,7 @@
       <div class="sidebar-tabs">
         <button class="sidebar-tab-btn active" onclick="switchSidebarTab('search')">
           <i data-lucide="search" style="width: 14px; height: 14px;"></i>
-          <span>البحث</span>
-        </button>
-        <button class="sidebar-tab-btn" onclick="switchSidebarTab('toc')">
-          <i data-lucide="list" style="width: 14px; height: 14px;"></i>
-          <span>الصفحات</span>
+          <span>البحث في الكتاب</span>
         </button>
         <button class="sidebar-tab-btn" onclick="switchSidebarTab('highlights')">
           <i data-lucide="highlighter" style="width: 14px; height: 14px;"></i>
@@ -337,55 +343,148 @@
           <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
           <span>الملاحظات</span>
         </button>
+        <button class="sidebar-tab-btn" onclick="switchSidebarTab('toc')">
+          <i data-lucide="list" style="width: 14px; height: 14px;"></i>
+          <span>الصفحات</span>
+        </button>
+        <button class="sidebar-tab-btn" onclick="switchSidebarTab('colors')">
+          <i data-lucide="palette" style="width: 14px; height: 14px;"></i>
+          <span>الألوان</span>
+        </button>
       </div>
 
-      <!-- Search Tab -->
+      <!-- TAB 1: SEARCH IN BOOK ("البحث الي داخل الكتاب") -->
       <div id="tabSearch" class="sidebar-tab-content active">
-        <div style="position: relative; margin-bottom: 12px;">
-          <i data-lucide="search" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-muted);"></i>
-          <input type="text" id="inBookSearchInput" class="form-input" style="padding-right: 32px; font-size: 0.85rem;" placeholder="ابحث داخل صفحات هذا الكتاب..." oninput="handleInBookSearch(this.value)">
+        <div style="margin-bottom: 12px;">
+          <div style="position: relative;">
+            <i data-lucide="search" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-muted);"></i>
+            <input type="text" id="inBookSearchInput" class="form-input" style="padding-right: 32px; font-size: 0.85rem;" placeholder="ابحث داخل صفحات هذا الكتاب..." oninput="handleInBookSearch(this.value)">
+          </div>
         </div>
-        <div id="searchMatchesCount" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 10px;"></div>
+        <div id="searchMatchesCount" style="font-size: 0.8rem; color: var(--accent-primary); font-weight: 600; margin-bottom: 10px;"></div>
         <div id="searchResultsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
       </div>
 
-      <!-- TOC / Pages Tab -->
+      <!-- TAB 2: HIGHLIGHTS ("التظليلات") -->
+      <div id="tabHighlights" class="sidebar-tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span style="font-size: 0.82rem; color: var(--text-muted);">تظليلات هذا الكتاب:</span>
+          <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="openManualHighlightModal()">
+            <i data-lucide="plus" style="width: 12px; height: 12px;"></i>
+            <span>+ إنشاء تظليل</span>
+          </button>
+        </div>
+        <div id="bookHighlightsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <!-- TAB 3: NOTES ("الملاحظات") -->
+      <div id="tabNotes" class="sidebar-tab-content">
+        <div style="margin-bottom: 14px;">
+          <textarea id="newNoteInput" class="form-textarea" rows="2" style="font-size: 0.85rem;" placeholder="اكتب ملاحظة أو فائدة للصفحة الحالية..."></textarea>
+          <button class="btn btn-primary" style="width: 100%; margin-top: 6px; padding: 6px; font-size: 0.8rem; justify-content: center;" onclick="saveCurrentPageNote()">
+            <span>+ إنشاء ملاحظة على صفحة <span id="noteCurrentPageBadge">1</span></span>
+          </button>
+        </div>
+        <div id="bookNotesList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+      </div>
+
+      <!-- TAB 4: TOC / PAGES ("الصفحات والفهرس") -->
       <div id="tabToc" class="sidebar-tab-content">
         <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px;">انتقال سريع للصفحات:</div>
         <div id="pagesGridTOC" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;"></div>
       </div>
 
-      <!-- Highlights Tab -->
-      <div id="tabHighlights" class="sidebar-tab-content">
-        <div id="bookHighlightsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
-      </div>
-
-      <!-- Notes Tab -->
-      <div id="tabNotes" class="sidebar-tab-content">
-        <div style="margin-bottom: 14px;">
-          <textarea id="newNoteInput" class="form-textarea" rows="2" style="font-size: 0.85rem;" placeholder="اكتب ملاحظة أو فائدة للصفحة الحالية..."></textarea>
-          <button class="btn btn-primary" style="width: 100%; margin-top: 6px; padding: 6px; font-size: 0.8rem; justify-content: center;" onclick="saveCurrentPageNote()">
-            <span>إضافة الملاحظة</span>
+      <!-- TAB 5: COLORS & CATEGORIES ("الألوان والتصنيفات") -->
+      <div id="tabColors" class="sidebar-tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span style="font-size: 0.82rem; color: var(--text-muted);">ألوان التظليل:</span>
+          <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="openCreateColorModal()">
+            <i data-lucide="plus" style="width: 12px; height: 12px;"></i>
+            <span>+ إنشاء لون جديد</span>
           </button>
         </div>
-        <div id="bookNotesList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        <div id="bookColorsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
       </div>
     </aside>
   </div>
 
-  <!-- Note Dialog Modal -->
+  <!-- MODAL: CREATE / EDIT COLOR ("إنشاء لون جديد") -->
+  <div id="colorModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title">إنشاء لون وتصنيف تظليل جديد</h3>
+        <button class="btn-icon" onclick="closeModal('colorModal')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">اسم التصنيف (المعنى الدلالي)</label>
+          <input type="text" id="modalColorName" class="form-input" placeholder="مثال: معلومات دينية، تاريخ، بطولات، اقتباسات...">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">اختيار اللون</label>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <input type="color" id="modalColorPicker" value="#10B981" style="width: 44px; height: 44px; padding: 2px; border: none; cursor: pointer; background: transparent;" oninput="document.getElementById('modalColorHex').value = this.value">
+            <input type="text" id="modalColorHex" class="form-input" style="width: 110px;" value="#10B981" oninput="document.getElementById('modalColorPicker').value = this.value">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">الوصف أو الغرض (اختياري)</label>
+          <input type="text" id="modalColorDesc" class="form-input" placeholder="الغرض من استخدام هذا اللون...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('colorModal')">إلغاء</button>
+        <button class="btn btn-primary" onclick="confirmSaveNewColor()">حفظ اللون الجديد</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MANUAL HIGHLIGHT ("إنشاء تظليل") -->
+  <div id="manualHighlightModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="highlighter" style="color: var(--accent-primary);"></i>
+          <span>إنشاء تظليل جديد</span>
+        </h3>
+        <button class="btn-icon" onclick="closeModal('manualHighlightModal')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">النص المراد تظليله</label>
+          <textarea id="manualHighlightText" class="form-textarea" rows="3" placeholder="الصق أو اكتب النص المراد تظليله في هذه الصفحة..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">اختر لون وتصنيف التظليل</label>
+          <select id="manualHighlightCatSelect" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">ملاحظة اختيارية على التظليل</label>
+          <input type="text" id="manualHighlightNote" class="form-input" placeholder="ملاحظة أو تعليق...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('manualHighlightModal')">إلغاء</button>
+        <button class="btn btn-primary" onclick="confirmSaveManualHighlight()">حفظ التظليل</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOTE ON SELECTION -->
   <div id="noteModal" class="modal-overlay" style="display: none;">
     <div class="modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 class="modal-title">إضافة ملاحظة على النص المظلل</h3>
-        <button class="btn-icon" onclick="closeNoteModal()"><i data-lucide="x"></i></button>
+        <button class="btn-icon" onclick="closeModal('noteModal')"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body">
         <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: var(--radius-md); font-family: var(--font-amiri); font-size: 0.95rem; margin-bottom: 12px;" id="noteSelectedTextPreview"></div>
         <textarea id="noteInputText" class="form-textarea" rows="3" placeholder="سجل تعليقك أو فائدتك على هذا النص..."></textarea>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeNoteModal()">إلغاء</button>
+        <button class="btn btn-secondary" onclick="closeModal('noteModal')">إلغاء</button>
         <button class="btn btn-primary" onclick="confirmSaveNoteFromSelection()">حفظ الملاحظة</button>
       </div>
     </div>
