@@ -9,6 +9,33 @@ let totalPages = 1;
 let currentFontSize = 19;
 let currentFontFamily = 'Amiri';
 let selectedTextSnippet = '';
+let activeSearchQuery = '';
+
+function stripArabicDiacritics(text) {
+  return (text || '').replace(/[\u064B-\u065F\u0670\u0640]/g, '');
+}
+
+function buildArabicSearchRegex(query) {
+  if (!query || !query.trim()) return null;
+  const clean = stripArabicDiacritics(query.trim());
+  let pattern = '';
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (ch === 'ا' || ch === 'أ' || ch === 'إ' || ch === 'آ') {
+      pattern += '[اأإآٱ]';
+    } else if (ch === 'ه' || ch === 'ة') {
+      pattern += '[هة]';
+    } else if (ch === 'ي' || ch === 'ى') {
+      pattern += '[يى]';
+    } else if (ch === ' ') {
+      pattern += '\\s+';
+    } else {
+      pattern += escapeRegExp(ch);
+    }
+    pattern += '[\\u064B-\\u065F\\u0670\\u0640]*';
+  }
+  return new RegExp('(' + pattern + ')', 'gi');
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   initReader();
@@ -18,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function initReader() {
   const urlParams = new URLSearchParams(window.location.search);
   bookId = urlParams.get('id');
+  activeSearchQuery = urlParams.get('q') || '';
 
   if (!bookId) {
     const books = window.BookDB.getBooks();
@@ -78,6 +106,15 @@ function initReader() {
   renderPagesTOC();
   renderBookHighlights();
   renderBookNotes();
+
+  // If search query is in URL, populate search input and switch tab if desired
+  if (activeSearchQuery) {
+    const searchInput = document.getElementById('inBookSearchInput');
+    if (searchInput) {
+      searchInput.value = activeSearchQuery;
+      handleInBookSearch(activeSearchQuery);
+    }
+  }
 
   // Event listeners for text selection
   document.addEventListener('selectionchange', handleTextSelection);
@@ -158,13 +195,21 @@ function applyFontFamily() {
 }
 
 // Page Navigation
-function goToPage(pageNum) {
+function goToPage(pageNum, searchHighlight = null) {
   if (pageNum < 1 || pageNum > totalPages) return;
   currentPage = pageNum;
+  if (searchHighlight !== null) {
+    activeSearchQuery = searchHighlight;
+  }
 
   // Update URL without reload
   const url = new URL(window.location.href);
   url.searchParams.set('page', currentPage);
+  if (activeSearchQuery) {
+    url.searchParams.set('q', activeSearchQuery);
+  } else {
+    url.searchParams.delete('q');
+  }
   window.history.replaceState(null, '', url.toString());
 
   // Save progress
@@ -178,9 +223,9 @@ function goToPage(pageNum) {
   const noteBadge = document.getElementById('noteCurrentPageBadge');
   if (noteBadge) noteBadge.textContent = currentPage;
 
-  // Scroll to top
+  // Scroll to top only if not focusing on a search match
   const viewport = document.getElementById('readerViewport');
-  if (viewport) viewport.scrollTop = 0;
+  if (viewport && !activeSearchQuery) viewport.scrollTop = 0;
 }
 
 // Render Page Content with Highlights
@@ -212,6 +257,19 @@ function renderCurrentPage() {
       }
     });
 
+    // Apply active search query highlight if present
+    if (activeSearchQuery && activeSearchQuery.trim()) {
+      const searchRegex = buildArabicSearchRegex(activeSearchQuery);
+      if (searchRegex) {
+        let isFirstMatch = true;
+        safeContent = safeContent.replace(searchRegex, (match) => {
+          const idAttr = isFirstMatch ? 'id="activeSearchTargetMatch"' : '';
+          isFirstMatch = false;
+          return `<mark ${idAttr} class="search-match-badge" style="background: rgba(245, 158, 11, 0.45); color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 700; box-shadow: 0 0 12px rgba(245, 158, 11, 0.7); outline: 2px solid #f59e0b;">${match}</mark>`;
+        });
+      }
+    }
+
     // Format newlines
     safeContent = safeContent.split('\n').map(line => {
       if (!line.trim()) return '<br>';
@@ -219,6 +277,16 @@ function renderCurrentPage() {
     }).join('');
 
     container.innerHTML = safeContent;
+
+    // Smooth scroll to match
+    if (activeSearchQuery) {
+      setTimeout(() => {
+        const targetMatch = document.getElementById('activeSearchTargetMatch');
+        if (targetMatch) {
+          targetMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 120);
+    }
   } else {
     container.innerHTML = `
       <div style="padding: 60px 20px; text-align: center; color: var(--text-muted);">
@@ -289,7 +357,7 @@ function handleInBookSearch(query) {
       const highlightedSnippet = safeSnippet.replace(regex, '<span class="search-match-text">$1</span>');
 
       html += `
-        <div style="padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border-color); cursor: pointer; transition: background 0.15s ease;" onclick="goToPage(${res.pageNumber})">
+        <div style="padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border-color); cursor: pointer; transition: background 0.15s ease;" onclick="goToPage(${res.pageNumber}, '${escapeHtml(query.trim())}')">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <span style="font-size: 0.78rem; font-weight: 700; color: var(--accent-primary);">صفحة ${res.pageNumber}</span>
             <span style="font-size: 0.7rem; color: var(--text-muted);">انقر للانتقال</span>

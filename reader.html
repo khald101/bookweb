@@ -4,16 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>قارئ الكتب الذكي | المكتبة الرقمية</title>
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('id');
-    const page = params.get('page');
-    let target = "https://coupon-metro-platinum-changing.trycloudflare.com";
-    if (id) {
-      target += "/reader/" + id + (page ? "?page=" + page : "");
-    }
-    window.location.replace(target);
-  </script>
+
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -507,6 +498,7 @@
   </div>
 
   <!-- Scripts -->
+  <script src="assets/js/library_data.js"></script>
   <script src="assets/js/db.js"></script>
   <script src="assets/js/reader.js"></script>
 </body>

@@ -381,7 +381,7 @@ function executeGlobalSearch() {
             </div>
           </div>
 
-          <a href="reader.html?id=${book.id}&page=${res.pages[0]?.pageNumber || 1}" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;">
+          <a href="reader.html?id=${book.id}&page=${res.pages[0]?.pageNumber || 1}&q=${encodeURIComponent(query)}" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;">
             <span>فتح الكتاب في القارئ</span>
             <i data-lucide="arrow-left" style="width: 14px; height: 14px;"></i>
           </a>
@@ -392,10 +392,10 @@ function executeGlobalSearch() {
             <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <span class="badge-pill" style="background: rgba(99, 102, 241, 0.2); color: var(--accent-primary);">صفحة ${p.pageNumber}</span>
-                <a href="reader.html?id=${book.id}&page=${p.pageNumber}" class="btn btn-secondary" style="font-size: 0.78rem; padding: 4px 10px;">انتقال للصفحة ${p.pageNumber}</a>
+                <a href="reader.html?id=${book.id}&page=${p.pageNumber}&q=${encodeURIComponent(query)}" class="btn btn-secondary" style="font-size: 0.78rem; padding: 4px 10px;">انتقال للصفحة ${p.pageNumber}</a>
               </div>
               ${p.matches.map(m => `
-                <a href="reader.html?id=${book.id}&page=${p.pageNumber}" style="display: block; font-size: 0.92rem; line-height: 1.7; color: var(--text-primary); padding: 8px 12px; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-sm); margin-bottom: 6px; text-decoration: none; font-family: var(--font-amiri);">
+                <a href="reader.html?id=${book.id}&page=${p.pageNumber}&q=${encodeURIComponent(query)}" style="display: block; font-size: 0.92rem; line-height: 1.7; color: var(--text-primary); padding: 8px 12px; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-sm); margin-bottom: 6px; text-decoration: none; font-family: var(--font-amiri);">
                   ${highlightMatchInSnippet(m.snippet, query)}
                 </a>
               `).join('')}
