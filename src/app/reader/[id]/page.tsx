@@ -128,6 +128,8 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const renderTaskRef = useRef<any>(null);
+  const pdfDocRef = useRef<any>(null);
+  const loadedBookIdRef = useRef<string | null>(null);
 
   // Visual Highlighting on Scanned PDF state
   const [isHighlightMode, setIsHighlightMode] = useState(true);
@@ -464,7 +466,15 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
 
   // 3. Load PDF Document when pdfjsLib is ready
   useEffect(() => {
-    if (!pdfLibReady || !book || book.format !== 'pdf') return;
+    if (!pdfLibReady || !bookId || book?.format !== 'pdf') return;
+
+    if (loadedBookIdRef.current === bookId && pdfDocRef.current) {
+      if (!pdfDoc) {
+        setPdfDoc(pdfDocRef.current);
+      }
+      setPdfDocLoading(false);
+      return;
+    }
 
     let isMounted = true;
     const loadPdfDoc = async () => {
@@ -474,9 +484,15 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
         const pdfjs = (window as any).pdfjsLib;
         const loadingTask = pdfjs.getDocument({
           url: `/api/books/${bookId}/file`,
+          disableAutoFetch: true,
+          disableStream: true,
+          rangeChunkSize: 65536,
           enableXfa: false,
+          isEvalSupported: false,
         });
         const doc = await loadingTask.promise;
+        pdfDocRef.current = doc;
+        loadedBookIdRef.current = bookId;
         if (isMounted) {
           setPdfDoc(doc);
           setPdfDocLoading(false);
@@ -501,7 +517,7 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
     return () => {
       isMounted = false;
     };
-  }, [pdfLibReady, book, bookId]);
+  }, [pdfLibReady, bookId, book?.format]);
 
   // 4. Render PDF Page on Canvas when currentPage or zoom changes
   useEffect(() => {
@@ -522,8 +538,12 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
         const page = await pdfDoc.getPage(currentPage);
         if (cancelRender) return;
 
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+        let canvas = canvasRef.current;
+        if (!canvas) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          canvas = canvasRef.current;
+        }
+        if (!canvas || cancelRender) return;
 
         const defaultViewport = page.getViewport({ scale: 1 });
         const currentWinWidth = typeof window !== 'undefined' ? window.innerWidth : 1000;
@@ -594,7 +614,7 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
         renderTaskRef.current = null;
       }
     };
-  }, [pdfDoc, currentPage, zoomLevel, pdfViewMode, book, bookId, windowWidth]);
+  }, [pdfDoc, currentPage, zoomLevel, pdfViewMode, bookId, book?.format, windowWidth]);
 
   // 5. Auto-save reading progress on page change
   useEffect(() => {
@@ -2028,7 +2048,7 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
                   style={{
                     width: '100%',
                     maxWidth: '800px',
-                    minHeight: '480px',
+                    minHeight: '440px',
                     background: 'var(--bg-card)',
                     border: '1px solid var(--border-color)',
                     borderRadius: 'var(--radius-md)',
@@ -2042,20 +2062,28 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
                     boxShadow: 'var(--shadow-md)',
                   }}
                 >
-                  <Loader2 size={36} className="animate-spin" style={{ color: 'var(--accent-primary)' }} />
-                  <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  <Loader2 size={38} className="animate-spin" style={{ color: 'var(--accent-primary)' }} />
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                     جاري فتح وتجهيز صفحات الكتاب الأصلية...
                   </div>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                     يتم قراءة الصفحة بدقة عالية مع تفعيل التظليل والبحث المباشر
                   </div>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ marginTop: '10px', fontSize: '0.85rem' }}
+                    onClick={() => setPdfViewMode('text')}
+                  >
+                    <FileText size={14} />
+                    <span>الانتقال للقراءة النصية الرقمية</span>
+                  </button>
                 </div>
               ) : pdfDocError ? (
                 <div
                   style={{
                     width: '100%',
                     maxWidth: '600px',
-                    padding: '40px 20px',
+                    padding: '30px 20px',
                     textAlign: 'center',
                     background: 'var(--bg-card)',
                     border: '1px solid var(--border-color)',
@@ -2067,15 +2095,23 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
                   <div style={{ color: '#EF4444', marginBottom: '14px', fontSize: '1.05rem', fontWeight: 600 }}>
                     {pdfDocError}
                   </div>
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => {
-                      setPdfDocError(null);
-                      setPdfLibReady(true);
-                    }}
-                  >
-                    إعادة المحاولة
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => {
+                        loadedBookIdRef.current = null;
+                        pdfDocRef.current = null;
+                        setPdfDocError(null);
+                        setPdfDoc(null);
+                        setPdfLibReady(true);
+                      }}
+                    >
+                      إعادة المحاولة
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => setPdfViewMode('text')}>
+                      عرض النص الرقمي
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>
