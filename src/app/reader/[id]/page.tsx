@@ -36,6 +36,15 @@ import {
   HelpCircle,
   StickyNote,
 } from 'lucide-react';
+import { findArabicMatches, normalizeArabicText, SearchSnippetMatch } from '@/lib/arabic';
+
+export interface ActiveSearchTarget {
+  query: string;
+  matchIndex: number;
+  origStart?: number;
+  origEnd?: number;
+  exactMatch?: string;
+}
 
 interface HighlightCategory {
   id: string;
@@ -181,6 +190,15 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchDurationMs, setSearchDurationMs] = useState<number | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [activeSearchTarget, setActiveSearchTarget] = useState<ActiveSearchTarget | null>(null);
+  const [activeScannedSearchBox, setActiveScannedSearchBox] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    exactMatch: string;
+    isEstimated?: boolean;
+  } | null>(null);
 
   // Progressive Scanned Book Search & Indexing state
   const [isScannedSearching, setIsScannedSearching] = useState(false);
@@ -224,6 +242,8 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
 
   const readerContainerRef = useRef<HTMLDivElement>(null);
   const pageViewRef = useRef<HTMLDivElement>(null);
+  const lastSavedPageRef = useRef<number | null>(null);
+  const hasAttemptedCoverRef = useRef(false);
 
   // 1. Dynamically load PDF.js script in browser
   useEffect(() => {
@@ -277,6 +297,31 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
       } else {
         setCurrentPage(1);
       }
+
+      // Check if search query or specific match was passed in URL
+      const qParam = searchParams.get('q');
+      const matchIndexParam = searchParams.get('matchIndex');
+      const startParam = searchParams.get('start');
+      const endParam = searchParams.get('end');
+
+      if (qParam && qParam.trim()) {
+        const matchIdx = matchIndexParam ? parseInt(matchIndexParam, 10) : 0;
+        const oStart = startParam ? parseInt(startParam, 10) : undefined;
+        const oEnd = endParam ? parseInt(endParam, 10) : undefined;
+
+        setActiveSearchTarget({
+          query: qParam.trim(),
+          matchIndex: isNaN(matchIdx) ? 0 : matchIdx,
+          origStart: oStart !== undefined && !isNaN(oStart) ? oStart : undefined,
+          origEnd: oEnd !== undefined && !isNaN(oEnd) ? oEnd : undefined,
+        });
+
+        setSearchQuery(qParam.trim());
+
+        if (data.book?.format === 'pdf') {
+          setPdfViewMode('text');
+        }
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -307,6 +352,110 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
       document.documentElement.setAttribute('data-theme', savedTheme);
     }
   }, [bookId]);
+
+  // Synchronize URL search parameters with activeSearchTarget
+  useEffect(() => {
+    const qParam = searchParams.get('q');
+    if (qParam && qParam.trim()) {
+      const cleanQ = qParam.trim();
+      const pageQuery = searchParams.get('page');
+      const pNum = pageQuery ? parseInt(pageQuery, 10) : NaN;
+      if (!isNaN(pNum) && pNum >= 1) {
+        setCurrentPage((prev) => (prev === pNum ? prev : pNum));
+      }
+
+      const matchIndexParam = searchParams.get('matchIndex');
+      const startParam = searchParams.get('start');
+      const endParam = searchParams.get('end');
+      const matchIdx = matchIndexParam ? parseInt(matchIndexParam, 10) : 0;
+      const oStart = startParam ? parseInt(startParam, 10) : undefined;
+      const oEnd = endParam ? parseInt(endParam, 10) : undefined;
+
+      setActiveSearchTarget((prev) => {
+        if (
+          prev &&
+          prev.query === cleanQ &&
+          prev.matchIndex === matchIdx &&
+          prev.origStart === oStart &&
+          prev.origEnd === oEnd
+        ) {
+          return prev;
+        }
+        return {
+          query: cleanQ,
+          matchIndex: isNaN(matchIdx) ? 0 : matchIdx,
+          origStart: oStart !== undefined && !isNaN(oStart) ? oStart : undefined,
+          origEnd: oEnd !== undefined && !isNaN(oEnd) ? oEnd : undefined,
+        };
+      });
+
+      setSearchQuery((prev) => (prev === cleanQ ? prev : cleanQ));
+
+      if (book?.format === 'pdf') {
+        if (book.isOcr) {
+          setPdfViewMode((prev) => (prev === 'original' ? prev : 'original'));
+        }
+      }
+    }
+  }, [searchParams, book?.format, book?.isOcr]);
+
+  // Load or calculate exact/proportional search highlight box on scanned book page
+  useEffect(() => {
+    if (!activeSearchTarget || !activeSearchTarget.query || book?.format !== 'pdf') {
+      setActiveScannedSearchBox(null);
+      return;
+    }
+
+    let isMounted = true;
+    const query = activeSearchTarget.query.trim();
+
+    // 1. Immediately calculate proportional fallback if page text contains match (zero latency)
+    const currentText = pages.find((p) => p.pageNumber === currentPage)?.textContent || ocrTextResult || '';
+    if (currentText) {
+      const normText = normalizeArabicText(currentText);
+      const normQuery = normalizeArabicText(query);
+      const matchIdx = activeSearchTarget.origStart !== undefined ? activeSearchTarget.origStart : normText.indexOf(normQuery);
+      if (matchIdx !== -1) {
+        const frac = matchIdx / Math.max(1, currentText.length);
+        const estimatedY = Math.max(7, Math.min(88, 8 + frac * 80));
+        setActiveScannedSearchBox({
+          x: 7,
+          y: Math.round(estimatedY * 10) / 10,
+          width: 86,
+          height: 4.5,
+          exactMatch: activeSearchTarget.exactMatch || query,
+          isEstimated: true,
+        });
+      }
+    }
+
+    // 2. Fetch exact bounding box from server API
+    fetch(`/api/books/${bookId}/search-box?page=${currentPage}&q=${encodeURIComponent(query)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted && data.success && data.box) {
+          setActiveScannedSearchBox(data.box);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeSearchTarget, currentPage, bookId, book?.format, pages, ocrTextResult]);
+
+  // Automatically scroll smooth to the active search highlight on the page
+  useEffect(() => {
+    if (!activeSearchTarget) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById('active-search-highlight');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [activeSearchTarget, activeScannedSearchBox, currentPage, pdfViewMode, pages, ocrTextResult]);
+
 
   // 3. Load PDF Document when pdfjsLib is ready
   useEffect(() => {
@@ -376,7 +525,8 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
         await page.render(renderContext).promise;
 
         // Auto-generate cover thumbnail from page 1 if not yet generated
-        if (currentPage === 1 && book && !book.coverUrl) {
+        if (currentPage === 1 && book && !book.coverUrl && !hasAttemptedCoverRef.current) {
+          hasAttemptedCoverRef.current = true;
           try {
             const thumbCanvas = document.createElement('canvas');
             const thumbViewport = page.getViewport({ scale: 0.4 });
@@ -412,8 +562,10 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
 
   // 5. Auto-save reading progress on page change
   useEffect(() => {
-    if (!book) return;
+    if (!bookId || !currentPage || currentPage === lastSavedPageRef.current) return;
+
     const timer = setTimeout(() => {
+      lastSavedPageRef.current = currentPage;
       fetch(`/api/books/${bookId}/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -423,10 +575,10 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
           lastPosition: { page: currentPage },
         }),
       }).catch(console.error);
-    }, 500);
+    }, 1200);
 
     return () => clearTimeout(timer);
-  }, [currentPage, totalPages, bookId, book]);
+  }, [currentPage, totalPages, bookId]);
 
   // ---------------------------------------------------------------------
   // Visual Scanned Page Highlighting Handlers (Mouse & Touch)
@@ -666,7 +818,10 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
     if (pageQuery) {
       const pageNum = parseInt(pageQuery, 10);
       if (!isNaN(pageNum) && pageNum >= 1) {
-        setCurrentPage((prev) => (totalPages > 1 ? Math.min(pageNum, totalPages) : pageNum));
+        setCurrentPage((prev) => {
+          const target = totalPages > 1 ? Math.min(pageNum, totalPages) : pageNum;
+          return prev === target ? prev : target;
+        });
       }
     }
   }, [searchParams, totalPages]);
@@ -685,8 +840,10 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
     // Update URL query param smoothly without reload
     try {
       const url = new URL(window.location.href);
-      url.searchParams.set('page', valid.toString());
-      window.history.replaceState(null, '', url.toString());
+      if (url.searchParams.get('page') !== valid.toString()) {
+        url.searchParams.set('page', valid.toString());
+        window.history.replaceState(null, '', url.toString());
+      }
     } catch (e) {
       // ignore
     }
@@ -1132,7 +1289,60 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
   // Active highlights on this page
   const pageHighlights = highlights.filter((h) => h.pageNumber === currentPage);
 
-  // Render reflowable text with highlight overlays
+  // Current page search matches lookup
+  const currentPageSearchMatches =
+    activeSearchTarget?.query && currentText
+      ? findArabicMatches(currentText, activeSearchTarget.query)
+      : [];
+
+  const currentMatchIndex = activeSearchTarget?.matchIndex ?? 0;
+
+  const goToNextSearchMatch = () => {
+    if (currentPageSearchMatches.length <= 1 || !activeSearchTarget) return;
+    const nextIdx = (currentMatchIndex + 1) % currentPageSearchMatches.length;
+    const m = currentPageSearchMatches[nextIdx];
+    if (m) {
+      setActiveSearchTarget({
+        query: activeSearchTarget.query,
+        matchIndex: m.matchIndex,
+        origStart: m.origStart,
+        origEnd: m.origEnd,
+        exactMatch: m.exactMatch,
+      });
+    }
+  };
+
+  const goToPrevSearchMatch = () => {
+    if (currentPageSearchMatches.length <= 1 || !activeSearchTarget) return;
+    const prevIdx =
+      (currentMatchIndex - 1 + currentPageSearchMatches.length) % currentPageSearchMatches.length;
+    const m = currentPageSearchMatches[prevIdx];
+    if (m) {
+      setActiveSearchTarget({
+        query: activeSearchTarget.query,
+        matchIndex: m.matchIndex,
+        origStart: m.origStart,
+        origEnd: m.origEnd,
+        exactMatch: m.exactMatch,
+      });
+    }
+  };
+
+  const handleSelectInBookSearchResult = (pageNumber: number, m: any) => {
+    if (isPdf && book?.isOcr) {
+      setPdfViewMode('original');
+    }
+    goToPage(pageNumber);
+    setActiveSearchTarget({
+      query: searchQuery.trim(),
+      matchIndex: m.matchIndex ?? 0,
+      origStart: m.origStart,
+      origEnd: m.origEnd,
+      exactMatch: m.exactMatch,
+    });
+  };
+
+  // Render reflowable text with highlight overlays & smart search highlights
   const renderHighlightedContent = () => {
     if (!currentText || currentText.trim().length === 0) {
       return (
@@ -1165,52 +1375,165 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
       );
     }
 
-    if (pageHighlights.length === 0) {
-      return (
-        <div style={{ whiteSpace: 'pre-wrap', lineHeight: 2.1, wordBreak: 'break-word' }}>
-          {currentText}
-        </div>
+    // 1. Gather all search matches on current page if activeSearchTarget is set
+    const searchMatches = activeSearchTarget?.query
+      ? findArabicMatches(currentText, activeSearchTarget.query)
+      : [];
+
+    // Find the target match: match by matchIndex, origStart, or default to first
+    let targetMatch: SearchSnippetMatch | undefined;
+    if (searchMatches.length > 0 && activeSearchTarget) {
+      targetMatch =
+        searchMatches.find((m) => m.matchIndex === activeSearchTarget.matchIndex) ||
+        (activeSearchTarget.origStart !== undefined
+          ? searchMatches.find((m) => m.origStart === activeSearchTarget.origStart)
+          : undefined) ||
+        searchMatches[0];
+    }
+
+    // 2. Build non-overlapping intervals
+    interface TextInterval {
+      start: number;
+      end: number;
+      type: 'search-target' | 'search-secondary' | 'permanent';
+      matchIndex?: number;
+      hl?: Highlight;
+    }
+
+    const intervals: TextInterval[] = [];
+
+    // Add search matches
+    searchMatches.forEach((m) => {
+      const isTarget = targetMatch && m.matchIndex === targetMatch.matchIndex;
+      intervals.push({
+        start: m.origStart,
+        end: m.origEnd,
+        type: isTarget ? 'search-target' : 'search-secondary',
+        matchIndex: m.matchIndex,
+      });
+    });
+
+    // Add permanent highlights
+    pageHighlights.forEach((hl) => {
+      if (!hl.text) return;
+      let startIdx = currentText.indexOf(hl.text);
+      while (startIdx !== -1) {
+        const endIdx = startIdx + hl.text.length;
+        intervals.push({
+          start: startIdx,
+          end: endIdx,
+          type: 'permanent',
+          hl,
+        });
+        startIdx = currentText.indexOf(hl.text, endIdx);
+      }
+    });
+
+    // Sort intervals by start ascending, priority to search-target, then search-secondary, then permanent
+    intervals.sort((a, b) => {
+      if (a.start !== b.start) return a.start - b.start;
+      const rank = (t: string) => (t === 'search-target' ? 3 : t === 'search-secondary' ? 2 : 1);
+      return rank(b.type) - rank(a.type);
+    });
+
+    // Filter out overlapping intervals
+    const cleanIntervals: TextInterval[] = [];
+    let lastEnd = 0;
+    for (const intv of intervals) {
+      if (intv.start >= lastEnd && intv.end > intv.start) {
+        cleanIntervals.push(intv);
+        lastEnd = intv.end;
+      }
+    }
+
+    // 3. Render segmented text preserving original formatting
+    const elements: React.ReactNode[] = [];
+    let cursor = 0;
+
+    cleanIntervals.forEach((interval, idx) => {
+      if (interval.start > cursor) {
+        elements.push(
+          <React.Fragment key={`txt_${cursor}`}>
+            {currentText.slice(cursor, interval.start)}
+          </React.Fragment>
+        );
+      }
+
+      const sliceText = currentText.slice(interval.start, interval.end);
+
+      if (interval.type === 'search-target') {
+        elements.push(
+          <mark
+            key={`st_${idx}`}
+            id="active-search-highlight"
+            className="search-highlight-active"
+            title={`نتيجة البحث: ${sliceText}`}
+          >
+            {sliceText}
+          </mark>
+        );
+      } else if (interval.type === 'search-secondary') {
+        elements.push(
+          <mark
+            key={`ss_${idx}`}
+            className="search-highlight-secondary"
+            onClick={() => {
+              setActiveSearchTarget((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      matchIndex: interval.matchIndex ?? 0,
+                      origStart: interval.start,
+                      origEnd: interval.end,
+                      exactMatch: sliceText,
+                    }
+                  : null
+              );
+            }}
+            title="موضع بحث آخر في الصفحة — اضغط للانتقال إليه"
+          >
+            {sliceText}
+          </mark>
+        );
+      } else if (interval.type === 'permanent' && interval.hl) {
+        const hl = interval.hl;
+        const cat = catMap.get(hl.categoryId);
+        const color = cat?.colorHex || '#EF4444';
+        elements.push(
+          <mark
+            key={`hl_${hl.id}_${idx}`}
+            className="app-highlight"
+            style={{
+              backgroundColor: `${color}33`,
+              borderBottom: `2.5px solid ${color}`,
+              color: 'inherit',
+              cursor: 'pointer',
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedHighlight(hl);
+            }}
+            title={`${cat?.name || 'تظليل'}: ${hl.note || ''}`}
+          >
+            {sliceText}
+          </mark>
+        );
+      }
+
+      cursor = interval.end;
+    });
+
+    if (cursor < currentText.length) {
+      elements.push(
+        <React.Fragment key={`txt_${cursor}`}>
+          {currentText.slice(cursor)}
+        </React.Fragment>
       );
     }
 
     return (
       <div style={{ whiteSpace: 'pre-wrap', lineHeight: 2.1, wordBreak: 'break-word' }}>
-        {currentText.split('\n\n').map((paragraph, pIdx) => {
-          let renderedParagraph: React.ReactNode = paragraph;
-
-          for (const hl of pageHighlights) {
-            const cat = catMap.get(hl.categoryId);
-            const color = cat?.colorHex || '#EF4444';
-
-            if (typeof renderedParagraph === 'string' && renderedParagraph.includes(hl.text)) {
-              const textContentStr: string = renderedParagraph;
-              const textParts: string[] = textContentStr.split(hl.text);
-              renderedParagraph = (
-                <span key={hl.id}>
-                  {textParts[0]}
-                  <mark
-                    className="app-highlight"
-                    style={{
-                      backgroundColor: `${color}33`,
-                      borderBottom: `2.5px solid ${color}`,
-                      color: 'inherit',
-                    }}
-                    title={`${cat?.name || 'تظليل'}: ${hl.note || ''}`}
-                  >
-                    {hl.text}
-                  </mark>
-                  {textParts.slice(1).join(hl.text)}
-                </span>
-              );
-            }
-          }
-
-          return (
-            <p key={pIdx} style={{ marginBottom: '1.4em' }}>
-              {renderedParagraph}
-            </p>
-          );
-        })}
+        {elements}
       </div>
     );
   };
@@ -1743,6 +2066,56 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
                     />
                   );
                 })}
+
+                {/* 2.5 Active Search Highlight on Scanned Book Page */}
+                {activeScannedSearchBox && (
+                  <div
+                    id="active-search-highlight"
+                    className="scanned-search-highlight-marker"
+                    style={{
+                      position: 'absolute',
+                      left: `${activeScannedSearchBox.x}%`,
+                      top: `${activeScannedSearchBox.y}%`,
+                      width: `${activeScannedSearchBox.width}%`,
+                      height: `${activeScannedSearchBox.height}%`,
+                      backgroundColor: 'rgba(234, 179, 8, 0.4)',
+                      border: '3px solid #EAB308',
+                      borderRadius: '6px',
+                      boxShadow: '0 0 25px rgba(234, 179, 8, 0.85), inset 0 0 12px rgba(234, 179, 8, 0.45)',
+                      pointerEvents: 'auto',
+                      zIndex: 25,
+                      animation: 'pulseGlow 2s infinite ease-in-out',
+                      cursor: 'pointer',
+                      transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                    }}
+                    title={`نتيجة البحث: ${activeScannedSearchBox.exactMatch || activeSearchTarget?.query}`}
+                  >
+                    {/* Floating Pill Label */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        right: '0',
+                        marginBottom: '6px',
+                        background: '#EAB308',
+                        color: '#000',
+                        fontWeight: 800,
+                        fontSize: '0.78rem',
+                        padding: '3px 10px',
+                        borderRadius: '20px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <Sparkles size={12} />
+                      <span>نتيجة البحث: «{activeScannedSearchBox.exactMatch || activeSearchTarget?.query}»</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* 3. Live Dragging Highlight Box Preview */}
                 {currentDragBox && (
@@ -2452,25 +2825,52 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
                             </button>
                           </div>
 
-                          {res.matches.map((m: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className="item-card"
-                              style={{
-                                padding: '8px 10px',
-                                marginBottom: '6px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem',
-                                lineHeight: 1.6,
-                                background: 'rgba(255, 255, 255, 0.03)',
-                                borderRadius: 'var(--radius-sm)',
-                              }}
-                              onClick={() => goToPage(res.pageNumber)}
-                              title="اضغط للانتقال إلى هذه الصفحة"
-                            >
-                              {highlightSnippet(m.snippet, searchQuery)}
-                            </div>
-                          ))}
+                          {res.matches.map((m: any, idx: number) => {
+                            const isMatchActive =
+                              currentPage === res.pageNumber &&
+                              (activeSearchTarget?.origStart === m.origStart ||
+                                activeSearchTarget?.matchIndex === m.matchIndex);
+
+                            return (
+                              <div
+                                key={idx}
+                                className="item-card"
+                                style={{
+                                  padding: '9px 12px',
+                                  marginBottom: '7px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.85rem',
+                                  lineHeight: 1.6,
+                                  background: isMatchActive
+                                    ? 'rgba(234, 179, 8, 0.16)'
+                                    : 'rgba(255, 255, 255, 0.03)',
+                                  border: isMatchActive
+                                    ? '1.5px solid #EAB308'
+                                    : '1px solid transparent',
+                                  borderRadius: 'var(--radius-sm)',
+                                  transition: 'all 0.15s ease',
+                                }}
+                                onClick={() => handleSelectInBookSearchResult(res.pageNumber, m)}
+                                title="اضغط للانتقال إلى موضع النتيجة تحديداً وتمييزها في الصفحة"
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                  <span style={{ fontSize: '0.76rem', color: isMatchActive ? '#EAB308' : 'var(--accent-primary)', fontWeight: 700 }}>
+                                    موضع {m.matchIndex + 1}: «{m.exactMatch}»
+                                  </span>
+                                  {m.score >= 85 ? (
+                                    <span className="search-match-badge exact" style={{ fontSize: '0.68rem', padding: '1px 5px' }}>
+                                      تطابق تام
+                                    </span>
+                                  ) : (
+                                    <span className="search-match-badge flexible" style={{ fontSize: '0.68rem', padding: '1px 5px' }}>
+                                      بحث مرن
+                                    </span>
+                                  )}
+                                </div>
+                                <div>{highlightSnippet(m.snippet, m.exactMatch || searchQuery)}</div>
+                              </div>
+                            );
+                          })}
                         </div>
                       ))}
                     </div>
@@ -3122,6 +3522,53 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Active Search Result Navigation Banner */}
+      {activeSearchTarget && (
+        <div className="search-active-banner">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Search size={16} style={{ color: '#FACC15', flexShrink: 0 }} />
+            <span>
+              تمييز نتيجة البحث عن: <strong>«{activeSearchTarget.query}»</strong>
+              {currentPageSearchMatches.length > 0 && (
+                <span style={{ marginRight: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                  (موضع {currentMatchIndex + 1} من {currentPageSearchMatches.length} في الصفحة)
+                </span>
+              )}
+            </span>
+          </div>
+
+          {currentPageSearchMatches.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '3px 8px', fontSize: '0.75rem', height: '28px' }}
+                onClick={goToPrevSearchMatch}
+                title="الموضع السابق في الصفحة"
+              >
+                السابق
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '3px 8px', fontSize: '0.75rem', height: '28px' }}
+                onClick={goToNextSearchMatch}
+                title="الموضع التالي في الصفحة"
+              >
+                التالي
+              </button>
+            </div>
+          )}
+
+          <button
+            className="btn-icon"
+            style={{ width: '28px', height: '28px', padding: 0, border: 'none', background: 'transparent' }}
+            onClick={() => setActiveSearchTarget(null)}
+            title="إزالة تمييز البحث المؤقت"
+          >
+            <X size={15} />
+          </button>
         </div>
       )}
     </div>

@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { db } from '@/lib/db';
 import { parseBookFile } from '@/lib/parser';
-
+import { autoIndexer } from '@/lib/indexer';
 import { seedInitialDataIfNeeded } from '@/lib/seed';
 
 export const dynamic = 'force-dynamic';
@@ -113,14 +113,22 @@ export async function POST(req: NextRequest) {
           coverUrl: extracted.coverUrl,
           status: 'ready',
           isOcr: extracted.isScanned,
-          ocrStatus: extracted.isScanned ? 'pending' : 'none',
+          ocrStatus: extracted.isScanned ? 'processing' : 'none',
         });
+
+        // Trigger immediate high-speed background indexing if scanned or PDF
+        if (format === 'pdf' || extracted.isScanned) {
+          autoIndexer.enqueue(book.id);
+        }
       } catch (parseError: any) {
         console.error(`Error parsing book ${fileName}:`, parseError);
         db.books.update(book.id, {
-          status: 'ready', // Mark ready so user can still attempt viewing
+          status: 'ready',
           errorMessage: 'تم رفع الملف ولكن تعذر استخراج النص الكامل',
         });
+        if (format === 'pdf') {
+          autoIndexer.enqueue(book.id);
+        }
       }
 
       const updated = db.books.getById(book.id);

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { normalizeArabicText, findMatchesWithSnippets, findMatchesWithSnippetsOptimized } from './arabic';
+import { normalizeArabicText, findArabicMatches, SearchSnippetMatch } from './arabic';
 
 export interface HighlightCategory {
   id: string;
@@ -112,8 +112,10 @@ interface DatabaseSchema {
   settings: UserSettings;
 }
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_DIR = path.join(process.cwd(), '.data');
 const DB_FILE = path.join(DATA_DIR, 'library.json');
+const LEGACY_DATA_DIR = path.join(process.cwd(), 'data');
+const LEGACY_DB_FILE = path.join(LEGACY_DATA_DIR, 'library.json');
 const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
 const BOOKS_DIR = path.join(UPLOADS_DIR, 'books');
 const COVERS_DIR = path.join(UPLOADS_DIR, 'covers');
@@ -121,6 +123,7 @@ const COVERS_DIR = path.join(UPLOADS_DIR, 'covers');
 // Ensure storage directories exist
 function ensureDirectories() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(LEGACY_DATA_DIR)) fs.mkdirSync(LEGACY_DATA_DIR, { recursive: true });
   if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   if (!fs.existsSync(BOOKS_DIR)) fs.mkdirSync(BOOKS_DIR, { recursive: true });
   if (!fs.existsSync(COVERS_DIR)) fs.mkdirSync(COVERS_DIR, { recursive: true });
@@ -225,21 +228,53 @@ function getInitialDB(): DatabaseSchema {
 // In-memory cache + persistent write-through
 const globalForDb = globalThis as unknown as { __app_memory_db?: DatabaseSchema };
 
+let lastMtime = 0;
+let lastSavedHash = '';
+let saveTimer: NodeJS.Timeout | null = null;
+
 function loadDB(): DatabaseSchema {
   ensureDirectories();
-  if (globalForDb.__app_memory_db) return globalForDb.__app_memory_db;
 
-  if (fs.existsSync(DB_FILE)) {
+  // Prefer .data/library.json, fallback to legacy data/library.json if newer or missing
+  let targetFileToRead = DB_FILE;
+  if (!fs.existsSync(DB_FILE) && fs.existsSync(LEGACY_DB_FILE)) {
+    targetFileToRead = LEGACY_DB_FILE;
+  } else if (fs.existsSync(DB_FILE) && fs.existsSync(LEGACY_DB_FILE)) {
     try {
-      const data = fs.readFileSync(DB_FILE, 'utf-8');
+      const dotStat = fs.statSync(DB_FILE);
+      const legStat = fs.statSync(LEGACY_DB_FILE);
+      if (legStat.mtimeMs > dotStat.mtimeMs && legStat.size > dotStat.size) {
+        targetFileToRead = LEGACY_DB_FILE;
+      }
+    } catch {}
+  }
+
+  if (fs.existsSync(targetFileToRead)) {
+    try {
+      const stat = fs.statSync(targetFileToRead);
+      if (globalForDb.__app_memory_db && stat.mtimeMs <= lastMtime && targetFileToRead === DB_FILE) {
+        return globalForDb.__app_memory_db;
+      }
+      const data = fs.readFileSync(targetFileToRead, 'utf-8');
       const loaded: DatabaseSchema = JSON.parse(data);
       if (!loaded.categories || loaded.categories.length === 0) {
         loaded.categories = [...DEFAULT_CATEGORIES];
       }
       globalForDb.__app_memory_db = loaded;
+      lastSavedHash = data;
+      lastMtime = stat.mtimeMs;
+
+      // Ensure .data/library.json has this content
+      if (targetFileToRead !== DB_FILE) {
+        try {
+          fs.writeFileSync(DB_FILE, data, 'utf-8');
+        } catch {}
+      }
+
       return loaded;
     } catch (err) {
       console.error('Error reading DB, using initial default', err);
+      if (globalForDb.__app_memory_db) return globalForDb.__app_memory_db;
     }
   }
 
@@ -253,13 +288,31 @@ function saveDB(): void {
   ensureDirectories();
   const current = globalForDb.__app_memory_db;
   if (!current) return;
-  const tempFile = `${DB_FILE}.tmp`;
-  try {
-    fs.writeFileSync(tempFile, JSON.stringify(current, null, 2), 'utf-8');
-    fs.renameSync(tempFile, DB_FILE);
-  } catch (err) {
-    console.error('Error writing DB file', err);
+
+  if (saveTimer) {
+    clearTimeout(saveTimer);
   }
+
+  // 3500ms debounce groups bulk indexing writes to disk so system stays snappy
+  saveTimer = setTimeout(() => {
+    try {
+      const serialized = JSON.stringify(current, null, 2);
+      if (serialized === lastSavedHash) {
+        return;
+      }
+      const tempFile = `${DB_FILE}.tmp`;
+      fs.writeFileSync(tempFile, serialized, 'utf-8');
+      fs.renameSync(tempFile, DB_FILE);
+      lastSavedHash = serialized;
+      try {
+        lastMtime = fs.statSync(DB_FILE).mtimeMs;
+      } catch {
+        // ignore
+      }
+    } catch (err) {
+      console.error('Error writing DB file', err);
+    }
+  }, 3500);
 }
 
 export const db = {
@@ -400,6 +453,34 @@ export const db = {
       });
       saveDB();
     },
+    upsertPagesBatch(bookId: string, pages: { pageNumber: number; textContent: string }[]): void {
+      if (!pages || pages.length === 0) return;
+      const current = loadDB();
+      const pageMap = new Map<number, BookPageText>();
+      for (const p of current.bookTexts) {
+        if (p.bookId === bookId) {
+          pageMap.set(p.pageNumber, p);
+        }
+      }
+      for (const p of pages) {
+        const existing = pageMap.get(p.pageNumber);
+        if (existing) {
+          existing.textContent = p.textContent;
+          existing.normalizedText = normalizeArabicText(p.textContent);
+        } else {
+          const newEntry: BookPageText = {
+            id: `txt_${bookId}_${p.pageNumber}`,
+            bookId,
+            pageNumber: p.pageNumber,
+            textContent: p.textContent,
+            normalizedText: normalizeArabicText(p.textContent),
+          };
+          current.bookTexts.push(newEntry);
+          pageMap.set(p.pageNumber, newEntry);
+        }
+      }
+      saveDB();
+    },
     saveSinglePage(bookId: string, pageNumber: number, textContent: string): void {
       const current = loadDB();
       const existing = current.bookTexts.find((p) => p.bookId === bookId && p.pageNumber === pageNumber);
@@ -428,27 +509,30 @@ export const db = {
       const pages = current.bookTexts.filter((p) => p.bookId === bookId);
       const results: {
         pageNumber: number;
-        matches: { index: number; snippet: string; exactMatch: string }[];
+        matches: SearchSnippetMatch[];
+        maxScore: number;
       }[] = [];
 
       const trimmed = (query || '').trim();
-      const normQuery = normalizeArabicText(trimmed);
-      if (!normQuery) return results;
+      if (!trimmed) return results;
 
       for (const page of pages) {
-        const matches = findMatchesWithSnippetsOptimized(
-          page.textContent,
-          page.normalizedText,
-          normQuery,
-          trimmed
-        );
+        const matches = findArabicMatches(page.textContent, trimmed);
         if (matches.length > 0) {
+          const maxScore = Math.max(...matches.map((m) => m.score || 0));
           results.push({
             pageNumber: page.pageNumber,
             matches,
+            maxScore,
           });
         }
       }
+
+      // Sort by maxScore descending (exact matches first), then by pageNumber ascending
+      results.sort((a, b) => {
+        if (b.maxScore !== a.maxScore) return b.maxScore - a.maxScore;
+        return a.pageNumber - b.pageNumber;
+      });
 
       return results;
     },
@@ -464,50 +548,146 @@ export const db = {
       const bookResults: {
         book: Book;
         totalMatches: number;
+        maxScore: number;
         pages: {
           pageNumber: number;
-          matches: { index: number; snippet: string; exactMatch: string }[];
+          matches: SearchSnippetMatch[];
+          maxScore: number;
         }[];
       }[] = [];
 
       const trimmed = (query || '').trim();
-      const normQuery = normalizeArabicText(trimmed);
-      if (!normQuery) return bookResults;
+      if (!trimmed) {
+        return {
+          bookResults: [],
+          highlightsResults: [],
+          notesResults: [],
+        };
+      }
 
       for (const [bId, book] of bookMap.entries()) {
         const pages = current.bookTexts.filter((p) => p.bookId === bId);
         let bookMatchCount = 0;
+        let bookMaxScore = 0;
         const pageMatches: {
           pageNumber: number;
-          matches: { index: number; snippet: string; exactMatch: string }[];
+          matches: SearchSnippetMatch[];
+          maxScore: number;
         }[] = [];
 
         for (const page of pages) {
-          const matches = findMatchesWithSnippetsOptimized(
-            page.textContent,
-            page.normalizedText,
-            normQuery,
-            trimmed
-          );
+          const matches = findArabicMatches(page.textContent, trimmed);
           if (matches.length > 0) {
             bookMatchCount += matches.length;
+            const pageMaxScore = Math.max(...matches.map((m) => m.score || 0));
+            bookMaxScore = Math.max(bookMaxScore, pageMaxScore);
             pageMatches.push({
               pageNumber: page.pageNumber,
               matches,
+              maxScore: pageMaxScore,
             });
           }
         }
 
         if (bookMatchCount > 0) {
+          // Sort pages in this book by maxScore descending, then pageNumber ascending
+          pageMatches.sort((a, b) => {
+            if (b.maxScore !== a.maxScore) return b.maxScore - a.maxScore;
+            return a.pageNumber - b.pageNumber;
+          });
+
           bookResults.push({
             book,
             totalMatches: bookMatchCount,
+            maxScore: bookMaxScore,
             pages: pageMatches,
           });
         }
       }
 
-      return bookResults;
+      // Sort books by highest match score, then totalMatches descending
+      bookResults.sort((a, b) => {
+        if (b.maxScore !== a.maxScore) return b.maxScore - a.maxScore;
+        return b.totalMatches - a.totalMatches;
+      });
+
+      // Also search in Highlights
+      const catMap = new Map(current.categories.map((c) => [c.id, c]));
+      const highlightsResults: {
+        id: string;
+        bookId: string;
+        bookTitle: string;
+        pageNumber: number;
+        categoryId: string;
+        categoryName?: string;
+        categoryColor?: string;
+        text: string;
+        note?: string | null;
+        matches: SearchSnippetMatch[];
+      }[] = [];
+
+      for (const h of current.highlights) {
+        if (collectionId) {
+          const b = bookMap.get(h.bookId);
+          if (!b) continue;
+        }
+        const textMatches = findArabicMatches(h.text || '', trimmed);
+        const noteMatches = h.note ? findArabicMatches(h.note, trimmed) : [];
+        if (textMatches.length > 0 || noteMatches.length > 0) {
+          const book = current.books.find((b) => b.id === h.bookId);
+          const cat = catMap.get(h.categoryId);
+          highlightsResults.push({
+            id: h.id,
+            bookId: h.bookId,
+            bookTitle: book?.title || 'كتاب غير معروف',
+            pageNumber: h.pageNumber,
+            categoryId: h.categoryId,
+            categoryName: cat?.name,
+            categoryColor: cat?.colorHex,
+            text: h.text,
+            note: h.note,
+            matches: textMatches.length > 0 ? textMatches : noteMatches,
+          });
+        }
+      }
+
+      // Also search in Notes
+      const notesResults: {
+        id: string;
+        bookId: string;
+        bookTitle: string;
+        pageNumber: number;
+        text: string;
+        snippet?: string;
+        matches: SearchSnippetMatch[];
+      }[] = [];
+
+      for (const n of current.notes) {
+        if (collectionId) {
+          const b = bookMap.get(n.bookId);
+          if (!b) continue;
+        }
+        const textMatches = findArabicMatches(n.text || '', trimmed);
+        const snippetMatches = n.snippet ? findArabicMatches(n.snippet, trimmed) : [];
+        if (textMatches.length > 0 || snippetMatches.length > 0) {
+          const book = current.books.find((b) => b.id === n.bookId);
+          notesResults.push({
+            id: n.id,
+            bookId: n.bookId,
+            bookTitle: book?.title || 'كتاب غير معروف',
+            pageNumber: n.pageNumber,
+            text: n.text,
+            snippet: n.snippet,
+            matches: textMatches.length > 0 ? textMatches : snippetMatches,
+          });
+        }
+      }
+
+      return {
+        bookResults,
+        highlightsResults,
+        notesResults,
+      };
     },
   },
 
@@ -704,6 +884,11 @@ export const db = {
       const totalPages = Math.max(1, data.totalPages);
       const currentPage = Math.min(Math.max(1, data.currentPage), totalPages);
       const percentage = Math.round((currentPage / totalPages) * 100);
+
+      const existing = current.progress[bookId];
+      if (existing && existing.currentPage === currentPage && existing.totalPages === totalPages) {
+        return existing;
+      }
 
       const prog: ReadingProgress = {
         bookId,

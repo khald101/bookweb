@@ -63,6 +63,8 @@ export default function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [loading, setLoading] = useState(true);
+  const [indexerStatus, setIndexerStatus] = useState<any>(null);
+  const [isTriggeringIndex, setIsTriggeringIndex] = useState(false);
 
   // Edit Metadata Modal state
   const [editingBook, setEditingBook] = useState<BookItem | null>(null);
@@ -79,9 +81,11 @@ export default function LibraryPage() {
   const [newColName, setNewColName] = useState('');
   const [newColDesc, setNewColDesc] = useState('');
 
-  const fetchBooks = async () => {
+  const fetchBooks = async (showLoadingState = false) => {
     try {
-      setLoading(true);
+      if (showLoadingState) {
+        setLoading(true);
+      }
       const res = await fetch('/api/books');
       const data = await res.json();
       if (data.success) {
@@ -106,9 +110,36 @@ export default function LibraryPage() {
     }
   };
 
+  const fetchIndexerStatus = async () => {
+    try {
+      const res = await fetch('/api/indexer');
+      const data = await res.json();
+      if (data.success) {
+        setIndexerStatus(data);
+      }
+    } catch {}
+  };
+
+  const handleStartAllIndexing = async () => {
+    setIsTriggeringIndex(true);
+    try {
+      const res = await fetch('/api/indexer', { method: 'POST' });
+      const data = await res.json();
+      fetchIndexerStatus();
+      fetchBooks();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsTriggeringIndex(false);
+    }
+  };
+
   useEffect(() => {
-    fetchBooks();
+    fetchBooks(true);
     fetchCollections();
+    fetchIndexerStatus();
+    const interval = setInterval(fetchIndexerStatus, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleSaveMetadata = async () => {
@@ -207,31 +238,27 @@ export default function LibraryPage() {
             <BookOpen size={28} style={{ color: 'var(--accent-primary)' }} />
             <span>مكتبتي الشخصية</span>
           </h1>
-          <p className="page-subtitle">
-            لديك {books.length} كتاب في المكتبة — اقرأ، وابحث، وظلل بنظام التصنيفات المخصص
+          <p className="page-subtitle" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span>لديك {books.length} كتاب في المكتبة — متاح للقراءة والبحث الفوري في كافة الصفحات</span>
+            {indexerStatus?.isProcessing && (
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  background: 'rgba(234, 179, 8, 0.15)',
+                  color: '#EAB308',
+                  border: '1px solid rgba(234, 179, 8, 0.3)',
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Sparkles size={11} className="animate-spin" />
+                <span>معالجة فائقة في الخلفية</span>
+              </span>
+            )}
           </p>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* View Mode Toggle */}
-          <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-md)', padding: '3px' }}>
-            <button
-              className={`btn-icon ${viewMode === 'grid' ? 'active' : ''}`}
-              onClick={() => setViewMode('grid')}
-              title="عرض الأغلفة"
-              style={viewMode === 'grid' ? { background: 'var(--accent-primary)', color: '#fff' } : {}}
-            >
-              <Grid size={16} />
-            </button>
-            <button
-              className={`btn-icon ${viewMode === 'list' ? 'active' : ''}`}
-              onClick={() => setViewMode('list')}
-              title="عرض القائمة"
-              style={viewMode === 'list' ? { background: 'var(--accent-primary)', color: '#fff' } : {}}
-            >
-              <List size={16} />
-            </button>
-          </div>
         </div>
       </div>
 
@@ -405,19 +432,13 @@ export default function LibraryPage() {
                     </div>
                   </div>
 
-                  {/* Scanned / OCR badge if applicable */}
-                  {book.isOcr && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--accent-secondary)' }}>
-                      <Sparkles size={12} />
-                      <span>
-                        {book.ocrStatus === 'completed'
-                          ? 'تم التعرف الضوئي (OCR)'
-                          : book.ocrStatus === 'processing'
-                          ? 'جاري فحص OCR...'
-                          : 'مستند مصور (يتطلب OCR)'}
-                      </span>
-                    </div>
-                  )}
+                  {/* Status badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', marginTop: '6px' }}>
+                    <span style={{ color: '#10B981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <CheckCircle size={12} />
+                      <span>مفهرس ومتاح للبحث الفوري</span>
+                    </span>
+                  </div>
 
                   {/* Actions Row */}
                   <div className="book-actions-row">

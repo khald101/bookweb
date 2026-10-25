@@ -18,6 +18,7 @@ import {
   Check,
   X,
 } from 'lucide-react';
+import { matchesFlexibleArabic } from '@/lib/arabic';
 
 interface HighlightCategory {
   id: string;
@@ -130,11 +131,11 @@ export default function HighlightsPage() {
   const filtered = highlights.filter((h) => {
     if (selectedCategory && h.categoryId !== selectedCategory) return false;
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const textMatch = h.text.toLowerCase().includes(q);
-      const noteMatch = h.note ? h.note.toLowerCase().includes(q) : false;
-      const catMatch = h.category ? h.category.name.toLowerCase().includes(q) : false;
-      const bookMatch = h.bookTitle ? h.bookTitle.toLowerCase().includes(q) : false;
+      const q = searchQuery.trim();
+      const textMatch = matchesFlexibleArabic(h.text, q);
+      const noteMatch = h.note ? matchesFlexibleArabic(h.note, q) : false;
+      const catMatch = h.category ? matchesFlexibleArabic(h.category.name, q) : false;
+      const bookMatch = h.bookTitle ? matchesFlexibleArabic(h.bookTitle, q) : false;
       return textMatch || noteMatch || catMatch || bookMatch;
     }
     return true;
@@ -307,7 +308,7 @@ export default function HighlightsPage() {
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Link
-                      href={`/reader/${hl.bookId}?page=${hl.pageNumber}`}
+                      href={`/reader/${hl.bookId}?page=${hl.pageNumber}${searchQuery.trim() ? '&q=' + encodeURIComponent(searchQuery.trim()) : hl.text ? '&q=' + encodeURIComponent(hl.text.slice(0, 40).trim()) : ''}`}
                       className="btn btn-secondary"
                       style={{ padding: '5px 12px', fontSize: '0.8rem' }}
                     >

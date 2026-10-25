@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import { FileText, Search, Edit2, Trash2, ArrowLeft, X, Check } from 'lucide-react';
+import { matchesFlexibleArabic } from '@/lib/arabic';
 
 interface NoteItem {
   id: string;
@@ -77,11 +78,11 @@ export default function NotesPage() {
 
   const filtered = notes.filter((n) => {
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.trim();
       return (
-        n.text.toLowerCase().includes(q) ||
-        (n.snippet && n.snippet.toLowerCase().includes(q)) ||
-        (n.bookTitle && n.bookTitle.toLowerCase().includes(q))
+        matchesFlexibleArabic(n.text, q) ||
+        (n.snippet && matchesFlexibleArabic(n.snippet, q)) ||
+        (n.bookTitle && matchesFlexibleArabic(n.bookTitle, q))
       );
     }
     return true;
@@ -225,7 +226,7 @@ export default function NotesPage() {
                 </span>
 
                 <Link
-                  href={`/reader/${note.bookId}?page=${note.pageNumber}`}
+                  href={`/reader/${note.bookId}?page=${note.pageNumber}${searchQuery.trim() ? '&q=' + encodeURIComponent(searchQuery.trim()) : note.snippet ? '&q=' + encodeURIComponent(note.snippet.slice(0, 40).trim()) : ''}`}
                   className="btn btn-secondary"
                   style={{ padding: '6px 14px', fontSize: '0.82rem', minHeight: '36px' }}
                 >

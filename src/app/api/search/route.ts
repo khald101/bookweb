@@ -13,15 +13,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, results: [], totalMatches: 0 });
     }
 
-    const bookResults = db.bookTexts.searchGlobal(query.trim(), collectionId);
-    const totalMatches = bookResults.reduce((acc, b) => acc + b.totalMatches, 0);
+    const { bookResults, highlightsResults, notesResults } = db.bookTexts.searchGlobal(query.trim(), collectionId);
+    const totalBookMatches = bookResults.reduce((acc, b) => acc + b.totalMatches, 0);
+    const totalMatches = totalBookMatches + highlightsResults.length + notesResults.length;
 
     return NextResponse.json({
       success: true,
       query: query.trim(),
       totalMatches,
+      totalBookMatches,
       totalBooksWithMatches: bookResults.length,
       results: bookResults,
+      highlightsResults,
+      notesResults,
+      totalHighlightMatches: highlightsResults.length,
+      totalNoteMatches: notesResults.length,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

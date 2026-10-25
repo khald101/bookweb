@@ -40,6 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# uploads
-/public/uploads/books/book_1792770013725_5q82v.pdf
+# uploads and runtime data
+/.data/
+/public/uploads/books/
 cloudflared.exe
+*.tsbuildinfo
