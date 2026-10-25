@@ -49,30 +49,61 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (range) {
-      const parts = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunksize = end - start + 1;
-      const fileStream = fs.createReadStream(resolvedPath, { start, end });
+      // RFC 7233 range parsing: bytes=start-end, bytes=start-, or bytes=-suffix
+      const rangeMatch = range.match(/bytes=(\d*)-(\d*)/);
+      if (rangeMatch) {
+        let start: number;
+        let end: number;
 
-      // Convert Node readable stream to Web ReadableStream
-      const stream = new ReadableStream({
-        start(controller) {
-          fileStream.on('data', (chunk) => controller.enqueue(chunk));
-          fileStream.on('end', () => controller.close());
-          fileStream.on('error', (err) => controller.error(err));
-        },
-      });
+        if (rangeMatch[1] === '' && rangeMatch[2] !== '') {
+          // Suffix byte range (e.g. bytes=-65536) used heavily by PDF.js to read xref
+          const suffix = parseInt(rangeMatch[2], 10);
+          start = Math.max(0, fileSize - suffix);
+          end = fileSize - 1;
+        } else if (rangeMatch[1] !== '' && rangeMatch[2] === '') {
+          // Open-ended range (e.g. bytes=1024-)
+          start = parseInt(rangeMatch[1], 10);
+          end = fileSize - 1;
+        } else if (rangeMatch[1] !== '' && rangeMatch[2] !== '') {
+          // Standard range (e.g. bytes=0-1024)
+          start = parseInt(rangeMatch[1], 10);
+          end = Math.min(fileSize - 1, parseInt(rangeMatch[2], 10));
+        } else {
+          start = 0;
+          end = fileSize - 1;
+        }
 
-      return new NextResponse(stream, {
-        status: 206,
-        headers: {
-          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-          'Accept-Ranges': 'bytes',
-          'Content-Length': chunksize.toString(),
-          'Content-Type': contentType,
-        },
-      });
+        if (isNaN(start) || isNaN(end) || start > end || start >= fileSize) {
+          return new NextResponse(null, {
+            status: 416,
+            headers: {
+              'Content-Range': `bytes */${fileSize}`,
+              'Accept-Ranges': 'bytes',
+            },
+          });
+        }
+
+        const chunksize = end - start + 1;
+        const fileStream = fs.createReadStream(resolvedPath, { start, end });
+
+        const stream = new ReadableStream({
+          start(controller) {
+            fileStream.on('data', (chunk) => controller.enqueue(chunk));
+            fileStream.on('end', () => controller.close());
+            fileStream.on('error', (err) => controller.error(err));
+          },
+        });
+
+        return new NextResponse(stream, {
+          status: 206,
+          headers: {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunksize.toString(),
+            'Content-Type': contentType,
+          },
+        });
+      }
     }
 
     const fileStream = fs.createReadStream(resolvedPath);
@@ -96,5 +127,42 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch (error: any) {
     console.error('File stream error:', error);
     return new NextResponse('خطأ في قراءة الملف', { status: 500 });
+  }
+}
+
+export async function HEAD(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const book = db.books.getById(id);
+    if (!book) return new NextResponse(null, { status: 404 });
+
+    const baseName = path.basename(book.filePath || '');
+    const candidates = [
+      book.filePath ? path.resolve(process.cwd(), book.filePath) : null,
+      path.join(process.cwd(), 'public', 'uploads', 'books', `${book.id}.${book.format}`),
+      baseName ? path.join(process.cwd(), 'public', 'uploads', 'books', baseName) : null,
+      book.filePath,
+      path.join(process.cwd(), 'uploads', 'books', `${book.id}.${book.format}`),
+    ].filter(Boolean) as string[];
+
+    const resolvedPath = candidates.find((p) => fs.existsSync(p));
+    if (!resolvedPath) return new NextResponse(null, { status: 404 });
+
+    const stat = fs.statSync(resolvedPath);
+    let contentType = 'application/octet-stream';
+    if (book.format === 'pdf') contentType = 'application/pdf';
+    else if (book.format === 'epub') contentType = 'application/epub+zip';
+    else if (book.format === 'txt') contentType = 'text/plain; charset=utf-8';
+
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        'Content-Length': stat.size.toString(),
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+      },
+    });
+  } catch {
+    return new NextResponse(null, { status: 500 });
   }
 }

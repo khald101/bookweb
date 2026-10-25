@@ -121,10 +121,13 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
   // PDF.js State
   const [pdfLibReady, setPdfLibReady] = useState(false);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [pdfDocLoading, setPdfDocLoading] = useState(false);
+  const [pdfDocError, setPdfDocError] = useState<string | null>(null);
   const [pdfRendering, setPdfRendering] = useState(false);
   const [pdfViewMode, setPdfViewMode] = useState<'original' | 'text'>('original');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
+  const renderTaskRef = useRef<any>(null);
 
   // Visual Highlighting on Scanned PDF state
   const [isHighlightMode, setIsHighlightMode] = useState(true);
@@ -319,7 +322,9 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
         setSearchQuery(qParam.trim());
 
         if (data.book?.format === 'pdf') {
-          setPdfViewMode('text');
+          if (data.book.isOcr || (data.pages && data.pages.length > 0)) {
+            setPdfViewMode('original');
+          }
         }
       }
     } catch (e) {
@@ -464,11 +469,17 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
     let isMounted = true;
     const loadPdfDoc = async () => {
       try {
+        setPdfDocLoading(true);
+        setPdfDocError(null);
         const pdfjs = (window as any).pdfjsLib;
-        const loadingTask = pdfjs.getDocument(`/api/books/${bookId}/file`);
+        const loadingTask = pdfjs.getDocument({
+          url: `/api/books/${bookId}/file`,
+          enableXfa: false,
+        });
         const doc = await loadingTask.promise;
         if (isMounted) {
           setPdfDoc(doc);
+          setPdfDocLoading(false);
           setTotalPages(doc.numPages);
 
           const pageQuery = searchParams.get('page');
@@ -477,8 +488,12 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
             setCurrentPage(Math.min(targetPage, doc.numPages));
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error loading PDF document:', err);
+        if (isMounted) {
+          setPdfDocLoading(false);
+          setPdfDocError('تعذر فتح ملف الكتاب الأصلي');
+        }
       }
     };
 
@@ -494,6 +509,14 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
 
     let cancelRender = false;
     const renderPdfPage = async () => {
+      // Cancel previous ongoing render task to avoid "Cannot use the same canvas during multiple render() operations"
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch (e) {}
+        renderTaskRef.current = null;
+      }
+
       try {
         setPdfRendering(true);
         const page = await pdfDoc.getPage(currentPage);
@@ -522,7 +545,10 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
           viewport: viewport,
         };
 
-        await page.render(renderContext).promise;
+        const renderTask = page.render(renderContext);
+        renderTaskRef.current = renderTask;
+        await renderTask.promise;
+        renderTaskRef.current = null;
 
         // Auto-generate cover thumbnail from page 1 if not yet generated
         if (currentPage === 1 && book && !book.coverUrl && !hasAttemptedCoverRef.current) {
@@ -547,16 +573,26 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
             console.error('Auto cover error:', e);
           }
         }
-      } catch (err) {
-        console.error('Render PDF page error:', err);
+      } catch (err: any) {
+        if (err?.name !== 'RenderingCancelledException') {
+          console.error('Render PDF page error:', err);
+        }
       } finally {
-        setPdfRendering(false);
+        if (!cancelRender) {
+          setPdfRendering(false);
+        }
       }
     };
 
     renderPdfPage();
     return () => {
       cancelRender = true;
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch (e) {}
+        renderTaskRef.current = null;
+      }
     };
   }, [pdfDoc, currentPage, zoomLevel, pdfViewMode, book, bookId, windowWidth]);
 
@@ -1986,51 +2022,108 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
                 </span>
               </div>
 
-              {pdfRendering && (
+              {/* Loading State or Error when pdfDoc is not yet ready */}
+              {pdfDocLoading || (!pdfDoc && !pdfDocError) ? (
                 <div
                   style={{
-                    position: 'absolute',
-                    top: '50px',
-                    padding: '8px 16px',
+                    width: '100%',
+                    maxWidth: '800px',
+                    minHeight: '480px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: 'var(--radius-md)',
-                    background: 'rgba(0,0,0,0.7)',
-                    color: '#fff',
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '0.85rem',
-                    zIndex: 20,
+                    justifyContent: 'center',
+                    gap: '16px',
+                    color: 'var(--text-secondary)',
+                    margin: '20px auto',
+                    boxShadow: 'var(--shadow-md)',
                   }}
                 >
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>جاري رسم صفحة الكتاب...</span>
+                  <Loader2 size={36} className="animate-spin" style={{ color: 'var(--accent-primary)' }} />
+                  <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    جاري فتح وتجهيز صفحات الكتاب الأصلية...
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    يتم قراءة الصفحة بدقة عالية مع تفعيل التظليل والبحث المباشر
+                  </div>
                 </div>
-              )}
+              ) : pdfDocError ? (
+                <div
+                  style={{
+                    width: '100%',
+                    maxWidth: '600px',
+                    padding: '40px 20px',
+                    textAlign: 'center',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    margin: '20px auto',
+                  }}
+                >
+                  <div style={{ color: '#EF4444', marginBottom: '14px', fontSize: '1.05rem', fontWeight: 600 }}>
+                    {pdfDocError}
+                  </div>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setPdfDocError(null);
+                      setPdfLibReady(true);
+                    }}
+                  >
+                    إعادة المحاولة
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {pdfRendering && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '50px',
+                        padding: '8px 16px',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'rgba(0,0,0,0.7)',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '0.85rem',
+                        zIndex: 20,
+                      }}
+                    >
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>جاري رسم صفحة الكتاب...</span>
+                    </div>
+                  )}
 
-              {/* The Interactive Page Canvas & Highlight Overlay Wrapper */}
-              <div
-                ref={canvasWrapperRef}
-                style={{
-                  position: 'relative',
-                  display: 'inline-block',
-                  background: '#fff',
-                  borderRadius: 'var(--radius-md)',
-                  boxShadow: 'var(--shadow-lg)',
-                  margin: '0 auto',
-                  border: '1px solid var(--border-color)',
-                  cursor: isHighlightMode ? 'crosshair' : 'default',
-                  userSelect: 'none',
-                  touchAction: isHighlightMode ? 'none' : 'auto',
-                }}
-                onPointerDown={handleCanvasPointerDown}
-                onPointerMove={handleCanvasPointerMove}
-                onPointerUp={handleCanvasPointerUp}
-              >
-                {/* 1. Underlying Real Scanned Page Canvas */}
-                <canvas
-                  ref={canvasRef}
-                  style={{ display: 'block', maxWidth: '100%', height: 'auto', pointerEvents: 'none' }}
-                />
+                  {/* The Interactive Page Canvas & Highlight Overlay Wrapper */}
+                  <div
+                    ref={canvasWrapperRef}
+                    style={{
+                      position: 'relative',
+                      display: 'inline-block',
+                      background: '#fff',
+                      borderRadius: 'var(--radius-md)',
+                      boxShadow: 'var(--shadow-lg)',
+                      margin: '0 auto',
+                      border: '1px solid var(--border-color)',
+                      cursor: isHighlightMode ? 'crosshair' : 'default',
+                      userSelect: 'none',
+                      touchAction: isHighlightMode ? 'none' : 'auto',
+                    }}
+                    onPointerDown={handleCanvasPointerDown}
+                    onPointerMove={handleCanvasPointerMove}
+                    onPointerUp={handleCanvasPointerUp}
+                  >
+                    {/* 1. Underlying Real Scanned Page Canvas */}
+                    <canvas
+                      ref={canvasRef}
+                      style={{ display: 'block', maxWidth: '100%', height: 'auto', pointerEvents: 'none' }}
+                    />
 
                 {/* 2. Visual Highlights Rendered Over the Scanned Page */}
                 {pageHighlights.map((hl) => {
@@ -2355,8 +2448,10 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
                   </div>
                 )}
               </div>
-            </div>
-          ) : (
+            </>
+          )}
+        </div>
+      ) : (
             /* REFLOWABLE TEXT MODE (For EPUB, DOCX, TXT, or OCR text) */
             <div
               className="reader-page-card"
