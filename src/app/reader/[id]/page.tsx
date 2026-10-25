@@ -482,10 +482,11 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
         setPdfDocLoading(true);
         setPdfDocError(null);
         const pdfjs = (window as any).pdfjsLib;
+        const pdfUrl = `/uploads/books/${bookId}.pdf`;
         const loadingTask = pdfjs.getDocument({
-          url: `/api/books/${bookId}/file`,
-          disableAutoFetch: true,
-          disableStream: true,
+          url: pdfUrl,
+          disableAutoFetch: false,
+          disableStream: false,
           rangeChunkSize: 65536,
           enableXfa: false,
           isEvalSupported: false,

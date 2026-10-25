@@ -24,6 +24,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       path.join(process.cwd(), 'uploads', 'books', `${book.id}.${book.format}`),
     ].filter(Boolean) as string[];
 
+    // If file exists in public/uploads/books, redirect immediately for native 206 range streaming (40ms)
+    const publicStaticPath = path.join(process.cwd(), 'public', 'uploads', 'books', `${book.id}.${book.format}`);
+    if (fs.existsSync(publicStaticPath)) {
+      return NextResponse.redirect(new URL(`/uploads/books/${book.id}.${book.format}`, req.url), { status: 307 });
+    }
+
     let resolvedPath = candidates.find((p) => fs.existsSync(p));
 
     // Fallback: If 104MB Book 8 is not yet on local disk, redirect to GitHub Release CDN
