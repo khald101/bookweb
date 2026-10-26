@@ -31,4 +31,4 @@ ENV NODE_ENV=production
 
 EXPOSE 7860
 
-CMD ["npm", "run", "start", "--", "-p", "7860", "-H", "0.0.0.0"]
+CMD ["sh", "-c", "npm run start -- -p ${PORT:-7860} -H 0.0.0.0"]

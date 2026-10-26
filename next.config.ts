@@ -6,9 +6,12 @@ const nextConfig: NextConfig = {
     'localhost',
     '127.0.0.1',
     '192.168.1.43',
+    'bookweb-8fk2.onrender.com',
+    '*.onrender.com',
     '*.trycloudflare.com',
     '*.loca.lt',
   ],
+  turbopack: {},
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {
