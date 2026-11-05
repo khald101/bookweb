@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { Readable } from 'stream';
 import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -22,13 +23,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       baseName ? path.join(process.cwd(), 'public', 'uploads', 'books', baseName) : null,
       book.filePath,
       path.join(process.cwd(), 'uploads', 'books', `${book.id}.${book.format}`),
+      baseName ? path.join(process.cwd(), 'uploads', 'books', baseName) : null,
     ].filter(Boolean) as string[];
-
-    // If file exists in public/uploads/books, redirect immediately for native 206 range streaming (40ms)
-    const publicStaticPath = path.join(process.cwd(), 'public', 'uploads', 'books', `${book.id}.${book.format}`);
-    if (fs.existsSync(publicStaticPath)) {
-      return NextResponse.redirect(new URL(`/uploads/books/${book.id}.${book.format}`, req.url), { status: 307 });
-    }
 
     let resolvedPath = candidates.find((p) => fs.existsSync(p));
 
@@ -91,16 +87,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
         const chunksize = end - start + 1;
         const fileStream = fs.createReadStream(resolvedPath, { start, end });
+        const stream = Readable.toWeb(fileStream);
 
-        const stream = new ReadableStream({
-          start(controller) {
-            fileStream.on('data', (chunk) => controller.enqueue(chunk));
-            fileStream.on('end', () => controller.close());
-            fileStream.on('error', (err) => controller.error(err));
-          },
-        });
-
-        return new NextResponse(stream, {
+        return new NextResponse(stream as any, {
           status: 206,
           headers: {
             'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -113,15 +102,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const fileStream = fs.createReadStream(resolvedPath);
-    const stream = new ReadableStream({
-      start(controller) {
-        fileStream.on('data', (chunk) => controller.enqueue(chunk));
-        fileStream.on('end', () => controller.close());
-        fileStream.on('error', (err) => controller.error(err));
-      },
-    });
+    const stream = Readable.toWeb(fileStream);
 
-    return new NextResponse(stream, {
+    return new NextResponse(stream as any, {
       status: 200,
       headers: {
         'Content-Length': fileSize.toString(),

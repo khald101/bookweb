@@ -482,16 +482,31 @@ function BookReaderComponent({ params }: { params: Promise<{ id: string }> }) {
         setPdfDocLoading(true);
         setPdfDocError(null);
         const pdfjs = (window as any).pdfjsLib;
-        const pdfUrl = `/uploads/books/${bookId}.pdf`;
-        const loadingTask = pdfjs.getDocument({
-          url: pdfUrl,
-          disableAutoFetch: false,
-          disableStream: false,
-          rangeChunkSize: 65536,
-          enableXfa: false,
-          isEvalSupported: false,
-        });
-        const doc = await loadingTask.promise;
+        const pdfUrl = `/api/books/${bookId}/file`;
+        let doc: any = null;
+        try {
+          const loadingTask = pdfjs.getDocument({
+            url: pdfUrl,
+            disableAutoFetch: false,
+            disableStream: false,
+            rangeChunkSize: 65536,
+            enableXfa: false,
+            isEvalSupported: false,
+          });
+          doc = await loadingTask.promise;
+        } catch (apiErr) {
+          console.warn('API file stream failed, trying static fallback:', apiErr);
+          const fallbackUrl = `/uploads/books/${bookId}.pdf`;
+          const fallbackTask = pdfjs.getDocument({
+            url: fallbackUrl,
+            disableAutoFetch: false,
+            disableStream: false,
+            rangeChunkSize: 65536,
+            enableXfa: false,
+            isEvalSupported: false,
+          });
+          doc = await fallbackTask.promise;
+        }
         pdfDocRef.current = doc;
         loadedBookIdRef.current = bookId;
         if (isMounted) {
